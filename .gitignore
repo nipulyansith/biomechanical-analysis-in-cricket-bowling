@@ -1,0 +1,23 @@
+# === Ignore Output Folders ===
+output/
+outputs/
+results/
+
+# === Ignore Video Files ===
+*.mp4
+*.MP4
+*.mov
+*.MOV
+*.avi
+*.mkv
+
+# === Ignore Temporary / System Files ===
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+
+# === Ignore Environment & Config Files ===
+.env
+.vscode/
+.idea/
