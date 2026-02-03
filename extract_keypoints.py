@@ -6,7 +6,7 @@ from ultralytics import YOLO
 from scipy.signal import savgol_filter, find_peaks
 
 # === SETTINGS ===
-VIDEO_PATH = "60FPS.MOV"                     # Input video
+VIDEO_PATH = "video.mp4"                     # Input video
 OUTPUT_CSV = "output/yolo_keypoints_right.csv"     # Output CSV
 MODEL_PATH = "yolov8n-pose.pt"               # Model file (downloaded or cached)
 SMOOTH_WINDOW = 7                            # Must be odd
@@ -151,7 +151,7 @@ print(f" Debug signals saved to: {debug_path}")
 if len(peaks_before_release) >= 5:
     start_frame = last_five_frames[0]
     end_frame = release_frame
-    trimmed_output_path = os.path.join(os.path.dirname(OUTPUT_CSV), "yolo_annotated_trimmed_right.mp4")
+    trimmed_output_path = os.path.join(os.path.dirname(OUTPUT_CSV), "yolo_annotated_trimmed.mp4")
 
     cap = cv2.VideoCapture(VIDEO_PATH)
     if not cap.isOpened():
