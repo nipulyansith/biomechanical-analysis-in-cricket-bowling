@@ -301,7 +301,16 @@ os.makedirs("output", exist_ok=True)
 model = YOLO("yolov8n-pose.pt")
 
 preferred_hand = get_user_hand_preference()
-possible_videos = ["1.mp4", "1.mov", "nipuledit.mp4", "new.MOV", "nipul.mov", "your_video.mp4"]
+print(f"✅ Will track: {preferred_hand} hand")
+
+if preferred_hand == 'auto':
+    print("⚠️  Warning: Auto-detect mode may result in inconsistent tracking between hands")
+else:
+    print(f"✅ Locked to {preferred_hand} hand for consistent tracking")
+
+# Try to find an available video file
+import os
+possible_videos = ["kavisha.mp4"]
 video_path = None
 
 print("Checking for available video files...")
