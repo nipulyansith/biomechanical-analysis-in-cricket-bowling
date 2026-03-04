@@ -1,97 +1,49 @@
 """
-FAST BOWLING – Requirement: Wrist Joint Velocity + Ball Release Speed (2D)
+wrist_velocity.py  (converted to match the SAME pipeline contract)
 
-What this script does (single video):
-✅ YOLOv8 Pose extraction (Ultralytics)
-✅ Pixel → meters calibration (stump height: click top & bottom)
-✅ Supports RIGHT-arm and LEFT-arm bowlers (BOWLING_ARM variable)
-✅ Detects release frame (bowling wrist highest OR peak wrist speed)
-✅ Computes:
-   1) Wrist linear velocity (m/s) + peak wrist speed near release
-   2) Wrist angular velocity (rad/s) of forearm (elbow→wrist angle) + peak
-✅ Optional ball release speed estimation:
-   - Mode A (default, robust): Ball speed ≈ wrist speed at release (proxy)
-   - Mode B (optional if you have a ball detector model): Track ball for N frames after release and compute speed
+✅ Requirement covered:
+- Wrist Joint Velocity and Ball Release Speed (Mode A proxy)
 
-Important notes:
-- This is 2D projected motion; results depend on camera angle and fps.
-- Wrist “angular velocity” is computed from the forearm segment angle (elbow->wrist).
-- Ball speed from Mode A is a proxy (literature says correlated, but not equal).
-- For real ball speed, use Mode B with a cricket-ball detection model.
+✅ Contract with run_all.py:
+Inputs (cached):
+  - <out_dir>/<trial_id>/keypoints.csv                (from step_duration.py)
+  - <out_dir>/<trial_id>/step_duration_summary.json   (release_frame)
+  - <out_dir>/<trial_id>/delivery_stride_summary.json (meters_per_pixel + front_ankle, events)
 
-Dependencies:
-pip install ultralytics opencv-python numpy pandas scipy
+Outputs:
+  1) <out_dir>/<trial_id>/wrist_velocity_frames.csv
+  2) <out_dir>/<trial_id>/wrist_velocity_summary.json
+  3) <out_dir>/<trial_id>/wrist_velocity_annotated.mp4
+
+✅ Major changes vs your original:
+- NO YOLO in this script (uses cached keypoints.csv)
+- NO calibration clicks (reuses meters_per_pixel from delivery_stride_summary.json)
+- Release frame is NOT re-detected here:
+    it reuses release_frame from step_duration_summary.json
+  (keeps ALL scripts aligned to the same events)
+- Robust derivative: central difference
+- Uses smoothing before derivative + also smooths speed & omega
+- Writes per-frame series + summary near release window
+
+Notes:
+- Mode B (ball detector) intentionally removed here for dataset consistency.
+  If you later add a ball model, make it a separate optional module.
 
 """
 
 import os
-import cv2
 import json
+import argparse
+from pathlib import Path
+
+import cv2
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from ultralytics import YOLO
 from scipy.signal import savgol_filter
 
-# =========================
-# USER SETTINGS
-# =========================
-VIDEO_PATH = "data/side3.MOV"
 
-# RIGHT or LEFT arm bowler (IMPORTANT)
-BOWLING_ARM = "LEFT"  # "RIGHT" or "LEFT"
-
-# Release detection mode:
-# - "WRIST_HIGHEST": release frame = bowling wrist highest (min y)
-# - "PEAK_WRIST_SPEED": release frame = peak wrist speed (often near release)
-RELEASE_DETECT_MODE = "WRIST_HIGHEST"  # "WRIST_HIGHEST" or "PEAK_WRIST_SPEED"
-
-MODEL_PATH = "yolov8n-pose.pt"
-
-OUT_DIR = "output_wrist_speed"
-KEYPOINT_CSV = os.path.join(OUT_DIR, "yolo_keypoints.csv")
-METRICS_JSON = os.path.join(OUT_DIR, "wrist_ball_metrics.json")
-TIMESERIES_CSV = os.path.join(OUT_DIR, "wrist_timeseries.csv")
-SPEED_PLOT_PNG = os.path.join(OUT_DIR, "wrist_speed_vs_time.png")
-OMEGA_PLOT_PNG = os.path.join(OUT_DIR, "wrist_omega_vs_time.png")
-
-# Smoothing (for derivatives)
-SMOOTH_WINDOW = 9   # odd preferred
-SMOOTH_POLY = 2
-
-# Calibration (ICC stumps ~ 71.1 cm)
-STUMP_HEIGHT_M = 0.711
-
-# ============= OPTIONAL BALL SPEED MODE B (requires a ball detector) =============
-# If you have a YOLO model that detects the cricket ball, put its path here.
-# Set to None to disable Mode B and use proxy speed only.
-BALL_MODEL_PATH = None  # e.g. "cricket_ball_yolo.pt"
-
-# How many frames after release to track ball for speed (Mode B)
-BALL_TRACK_FRAMES = 12
-
-# =========================
-# KEYPOINT DEFINITIONS
-# =========================
-KEYPOINT_NAMES = [
-    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
-    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
-    "left_wrist", "right_wrist", "left_hip", "right_hip",
-    "left_knee", "right_knee", "left_ankle", "right_ankle"
-]
-
-SELECTED_POINTS = [
-    "left_elbow", "right_elbow",
-    "left_wrist", "right_wrist"
-]
-
-# =========================
-# HELPERS
-# =========================
-def ensure_dir(path: str):
-    os.makedirs(path, exist_ok=True)
-
-def make_window(n, length):
+# ---------------- Helpers ----------------
+def make_window(n: int, length: int) -> int:
     w = n if n % 2 == 1 else n + 1
     if length <= 3:
         return 3
@@ -99,68 +51,16 @@ def make_window(n, length):
         w = length - 1 if (length - 1) % 2 == 1 else length - 2
     return max(3, w)
 
-def smooth_signal(sig, win, poly=2):
+
+def smooth_signal(sig, win=9, poly=2):
+    sig = np.asarray(sig, dtype=float)
     if len(sig) < 3:
         return sig.copy()
     w = make_window(win, len(sig))
     return savgol_filter(sig, window_length=w, polyorder=min(poly, w - 1))
 
-def calibrate_pixels_to_m(video_path, stump_height_m=0.711):
-    """
-    Click TOP and BOTTOM of stump on first frame. Returns meters_per_pixel.
-    """
-    cap = cv2.VideoCapture(video_path)
-    ok, frame = cap.read()
-    cap.release()
-    if not ok:
-        raise RuntimeError("Could not read video for calibration.")
 
-    clicks = []
-
-    def on_mouse(event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            clicks.append((x, y))
-
-    cv2.namedWindow("Calibration", cv2.WINDOW_NORMAL)
-    cv2.setMouseCallback("Calibration", on_mouse)
-
-    print("\nCALIBRATION:")
-    print("Click 1) TOP of stump, 2) BOTTOM of stump. Press ESC to cancel.")
-
-    while True:
-        show = frame.copy()
-        for i, (cx, cy) in enumerate(clicks):
-            cv2.circle(show, (cx, cy), 6, (0, 255, 0), -1)
-            cv2.putText(show, str(i + 1), (cx + 8, cy - 8),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-
-        cv2.putText(show, "Click TOP then BOTTOM of stump (2 clicks). ESC to cancel.",
-                    (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-
-        cv2.imshow("Calibration", show)
-        key = cv2.waitKey(30) & 0xFF
-        if key == 27:
-            cv2.destroyWindow("Calibration")
-            raise RuntimeError("Calibration cancelled.")
-        if len(clicks) >= 2:
-            break
-
-    cv2.destroyWindow("Calibration")
-
-    (x1, y1), (x2, y2) = clicks[0], clicks[1]
-    px_dist = float(np.hypot(x2 - x1, y2 - y1))
-    if px_dist < 2:
-        raise RuntimeError("Calibration failed: clicked points too close.")
-
-    meters_per_pixel = float(stump_height_m / px_dist)
-    print(f"✅ Calibration: stump_px={px_dist:.2f}px  -> meters_per_pixel={meters_per_pixel:.6f}")
-    return meters_per_pixel
-
-def central_diff(sig, dt):
-    """
-    Central difference derivative (more stable than forward difference).
-    For ends, uses forward/backward.
-    """
+def central_diff(sig, dt: float):
     sig = np.asarray(sig, dtype=float)
     out = np.zeros_like(sig, dtype=float)
     if len(sig) < 2:
@@ -171,544 +71,318 @@ def central_diff(sig, dt):
         out[1:-1] = (sig[2:] - sig[:-2]) / (2.0 * dt)
     return out
 
+
 def unwrap_angle(theta):
     return np.unwrap(np.asarray(theta, dtype=float))
+
 
 def pick_arm_points(bowling_arm: str):
     bowling_arm = bowling_arm.upper().strip()
     if bowling_arm not in ["RIGHT", "LEFT"]:
-        raise ValueError("BOWLING_ARM must be 'RIGHT' or 'LEFT'")
+        raise ValueError("bowling_arm must be RIGHT or LEFT")
     wrist = "right_wrist" if bowling_arm == "RIGHT" else "left_wrist"
     elbow = "right_elbow" if bowling_arm == "RIGHT" else "left_elbow"
     return elbow, wrist
 
-def find_release_frame(df, fps, wrist_col_y_sm, wrist_speed_sm):
-    """
-    Returns release_idx (0-based) and release_frame (1-based frame number).
-    """
-    if RELEASE_DETECT_MODE.upper() == "PEAK_WRIST_SPEED":
-        idx = int(np.nanargmax(wrist_speed_sm))
-    else:
-        idx = int(np.nanargmin(wrist_col_y_sm))
-    frame_num = int(df.loc[idx, "frame"])
-    return idx, frame_num
 
-# ----------------- Optional Ball Mode B helpers -----------------
-def detect_ball_center_yolo(frame, ball_model):
-    """
-    Return (x,y,conf) for the highest-confidence ball detection in this frame.
-    If no detection -> (None,None,None)
-    """
-    res = ball_model.predict(frame, verbose=False)
-    if len(res) == 0 or res[0].boxes is None or len(res[0].boxes) == 0:
-        return None, None, None
-    boxes = res[0].boxes
-    confs = boxes.conf.detach().cpu().numpy()
-    xyxy = boxes.xyxy.detach().cpu().numpy()
-    j = int(np.argmax(confs))
-    x1, y1, x2, y2 = xyxy[j]
-    cx = float((x1 + x2) / 2.0)
-    cy = float((y1 + y2) / 2.0)
-    return cx, cy, float(confs[j])
+def frame_to_idx(df, frame_no: int):
+    hits = df.index[df["frame"] == int(frame_no)].tolist()
+    return hits[0] if hits else None
 
-def compute_ball_speed_mode_b(video_path, release_frame, meters_per_pixel, fps, ball_model, n_frames=12):
-    """
-    Track ball for n_frames after release. Compute average speed (m/s) and peak speed (m/s).
-    Requires BALL_MODEL_PATH (ball detector).
-    """
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        return None
 
-    cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, release_frame - 1))
-    pts = []
-    frames_used = 0
+def draw_overlay(frame, frame_no, label_lines, wrist_xy, elbow_xy, speed_mps, omega_rads):
+    h, w = frame.shape[:2]
 
-    while frames_used < n_frames:
-        ok, frame = cap.read()
-        if not ok:
-            break
-        cx, cy, conf = detect_ball_center_yolo(frame, ball_model)
-        if cx is not None and cy is not None:
-            pts.append((cx, cy))
-        else:
-            pts.append((np.nan, np.nan))
-        frames_used += 1
+    if elbow_xy is not None:
+        cv2.circle(frame, tuple(elbow_xy.astype(int)), 6, (255, 0, 0), -1)
+    if wrist_xy is not None:
+        cv2.circle(frame, tuple(wrist_xy.astype(int)), 6, (0, 255, 0), -1)
+    if elbow_xy is not None and wrist_xy is not None:
+        cv2.line(frame, tuple(elbow_xy.astype(int)), tuple(wrist_xy.astype(int)), (255, 255, 255), 2)
 
-    cap.release()
+    # HUD
+    x0, y0 = 25, 30
+    box_w, box_h = 720, 205
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x0, y0), (x0 + box_w, y0 + box_h), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
 
-    pts = np.asarray(pts, dtype=float)
-    if np.all(~np.isfinite(pts)):
-        return None
+    cv2.putText(frame, f"Frame: {frame_no}", (x0 + 15, y0 + 45),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.95, (255, 255, 255), 2)
 
-    # smooth and differentiate
-    x = smooth_signal(pts[:, 0], SMOOTH_WINDOW, SMOOTH_POLY)
-    y = smooth_signal(pts[:, 1], SMOOTH_WINDOW, SMOOTH_POLY)
+    yy = y0 + 85
+    for s in label_lines[:2]:
+        cv2.putText(frame, s, (x0 + 15, yy),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.95, (0, 255, 255), 2)
+        yy += 35
 
-    dt = 1.0 / float(fps)
-    vx = central_diff(x, dt) * meters_per_pixel
-    vy = central_diff(y, dt) * meters_per_pixel
-    speed = np.sqrt(vx * vx + vy * vy)
+    cv2.putText(frame, f"Wrist speed: {speed_mps:.2f} m/s  ({speed_mps*3.6:.1f} km/h)",
+                (x0 + 15, y0 + 155),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.90, (255, 255, 255), 2)
 
-    # ignore NaNs
-    speed_valid = speed[np.isfinite(speed)]
-    if len(speed_valid) == 0:
-        return None
+    cv2.putText(frame, f"Forearm omega: {omega_rads:.2f} rad/s",
+                (x0 + 15, y0 + 190),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.90, (255, 255, 255), 2)
 
-    return {
-        "ball_speed_avg_mps": float(np.nanmean(speed_valid)),
-        "ball_speed_peak_mps": float(np.nanmax(speed_valid)),
-        "ball_speed_avg_kmh": float(np.nanmean(speed_valid) * 3.6),
-        "ball_speed_peak_kmh": float(np.nanmax(speed_valid) * 3.6),
-        "tracked_frames": int(frames_used),
-        "note": "Mode B: ball speed computed from detected ball centers after release."
+
+# ---------------- Main ----------------
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--video", required=True)
+    parser.add_argument("--trial_id", required=True)
+    parser.add_argument("--out_dir", required=True)
+    parser.add_argument("--bowling_arm", default="RIGHT", choices=["LEFT", "RIGHT"])
+    parser.add_argument("--metric_name", default="wrist_velocity")
+    parser.add_argument("--smooth_window", type=int, default=9)
+    parser.add_argument("--smooth_poly", type=int, default=2)
+    parser.add_argument("--near_ms", type=int, default=120)  # ± window around release for "near release" peaks
+    args = parser.parse_args()
+
+    out_dir = Path(args.out_dir)
+    trial_dir = out_dir / args.trial_id
+    trial_dir.mkdir(parents=True, exist_ok=True)
+
+    metric = args.metric_name
+
+    # cached inputs
+    keypoints_csv = trial_dir / "keypoints.csv"
+    step_summary = trial_dir / "step_duration_summary.json"
+    stride_summary = trial_dir / "delivery_stride_summary.json"
+
+    if not keypoints_csv.exists():
+        raise FileNotFoundError(f"Missing {keypoints_csv}. Run step_duration.py first.")
+    if not step_summary.exists():
+        raise FileNotFoundError(f"Missing {step_summary}. Run step_duration.py first.")
+    if not stride_summary.exists():
+        raise FileNotFoundError(f"Missing {stride_summary}. Run delivery_stride.py first.")
+
+    # outputs
+    frames_out = trial_dir / f"{metric}_frames.csv"
+    summary_out = trial_dir / f"{metric}_summary.json"
+    annotated_out = trial_dir / f"{metric}_annotated.mp4"
+
+    # open video for fps + size
+    cap0 = cv2.VideoCapture(str(args.video))
+    if not cap0.isOpened():
+        raise RuntimeError("Cannot open video")
+    fps = float(cap0.get(cv2.CAP_PROP_FPS) or 60.0)
+    width = int(cap0.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap0.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total_frames = int(cap0.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap0.release()
+
+    dt = 1.0 / fps
+    print(f"🎥 Frames={total_frames}, FPS={fps:.2f}")
+
+    # load cached keypoints
+    df = pd.read_csv(keypoints_csv)
+    df.ffill(inplace=True)
+    df.bfill(inplace=True)
+
+    elbow_name, wrist_name = pick_arm_points(args.bowling_arm)
+
+    # load events + scale
+    with open(step_summary, "r", encoding="utf-8") as f:
+        ss = json.load(f)
+    release_frame = int(ss["release_frame"])
+
+    with open(stride_summary, "r", encoding="utf-8") as f:
+        ds = json.load(f)
+    meters_per_pixel = ds.get("meters_per_pixel", None)
+    if meters_per_pixel is None:
+        cm_per_pixel = ds.get("cm_per_pixel", None)
+        if cm_per_pixel is None:
+            raise RuntimeError("No scale found in delivery_stride_summary.json")
+        meters_per_pixel = float(cm_per_pixel) / 100.0
+    meters_per_pixel = float(meters_per_pixel)
+
+    # optional: segment for annotation (BFC/FFC → Release)
+    ffc_frame = int(ds["ffc_frame"])
+    bfc_frame = ds.get("bfc_frame", None)
+    bfc_frame = int(bfc_frame) if bfc_frame is not None else None
+    start_frame = bfc_frame if bfc_frame is not None else ffc_frame
+    end_frame = release_frame
+
+    rel_idx = frame_to_idx(df, release_frame)
+    if rel_idx is None:
+        raise RuntimeError("release_frame not found in keypoints.csv (frame mismatch).")
+
+    # smooth elbow + wrist
+    wx = smooth_signal(df[f"{wrist_name}_x"].astype(float).to_numpy(), args.smooth_window, args.smooth_poly)
+    wy = smooth_signal(df[f"{wrist_name}_y"].astype(float).to_numpy(), args.smooth_window, args.smooth_poly)
+    ex = smooth_signal(df[f"{elbow_name}_x"].astype(float).to_numpy(), args.smooth_window, args.smooth_poly)
+    ey = smooth_signal(df[f"{elbow_name}_y"].astype(float).to_numpy(), args.smooth_window, args.smooth_poly)
+
+    # linear velocity (m/s)
+    vx_px = central_diff(wx, dt)
+    vy_px = central_diff(wy, dt)
+    vx_m = vx_px * meters_per_pixel
+    vy_m = vy_px * meters_per_pixel
+    speed_mps = np.sqrt(vx_m * vx_m + vy_m * vy_m)
+    speed_mps_sm = smooth_signal(speed_mps, args.smooth_window, args.smooth_poly)
+
+    # angular velocity of forearm segment (rad/s)
+    theta = np.arctan2((wy - ey), (wx - ex))
+    theta_u = unwrap_angle(theta)
+    omega = central_diff(theta_u, dt)
+    omega_sm = smooth_signal(omega, args.smooth_window, args.smooth_poly)
+
+    # time axis
+    time_s = (df["frame"].astype(float).to_numpy() - 1.0) / fps
+
+    # peak overall + near release window
+    peak_idx = int(np.nanargmax(speed_mps_sm))
+    peak_frame = int(df.loc[peak_idx, "frame"])
+    peak_speed = float(speed_mps_sm[peak_idx])
+
+    win = int(round((args.near_ms / 1000.0) * fps))
+    a = max(0, rel_idx - win)
+    b = min(len(df) - 1, rel_idx + win)
+
+    near_idx = a + int(np.nanargmax(speed_mps_sm[a:b+1]))
+    near_frame = int(df.loc[near_idx, "frame"])
+    near_peak = float(speed_mps_sm[near_idx])
+
+    # peak abs omega near release
+    omega_slice = omega_sm[a:b+1]
+    near_omega_idx = a + int(np.nanargmax(np.abs(omega_slice)))
+    near_omega_frame = int(df.loc[near_omega_idx, "frame"])
+    near_omega_peak = float(omega_sm[near_omega_idx])
+
+    # at release
+    speed_at_release = float(speed_mps_sm[rel_idx])
+    omega_at_release = float(omega_sm[rel_idx])
+
+    # ---------------- Frame-level CSV ----------------
+    frames_df = pd.DataFrame({
+        "frame": df["frame"].astype(int),
+        "time_s": time_s,
+
+        "wrist_x_sm": wx,
+        "wrist_y_sm": wy,
+        "elbow_x_sm": ex,
+        "elbow_y_sm": ey,
+
+        "wrist_vx_mps": vx_m,
+        "wrist_vy_mps": vy_m,
+        "wrist_speed_mps_sm": speed_mps_sm,
+        "wrist_speed_kmh_sm": speed_mps_sm * 3.6,
+
+        "forearm_angle_rad": theta_u,
+        "forearm_omega_rads_sm": omega_sm,
+
+        "is_release": 0
+    })
+    frames_df.loc[frames_df["frame"] == int(release_frame), "is_release"] = 1
+    frames_df.to_csv(frames_out, index=False)
+    print(f"📌 Saved frames CSV: {frames_out}")
+
+    # ---------------- Summary JSON ----------------
+    summary = {
+        "video": os.path.basename(args.video),
+        "fps": float(fps),
+        "bowling_arm": args.bowling_arm.upper(),
+        "meters_per_pixel": float(meters_per_pixel),
+
+        "release_frame": int(release_frame),
+
+        "wrist_speed": {
+            "at_release_mps": float(speed_at_release),
+            "at_release_kmh": float(speed_at_release * 3.6),
+
+            "peak_overall_mps": float(peak_speed),
+            "peak_overall_frame": int(peak_frame),
+
+            "peak_near_release_mps": float(near_peak),
+            "peak_near_release_frame": int(near_frame),
+
+            "near_window_ms": int(args.near_ms)
+        },
+        "forearm_angular_velocity": {
+            "omega_at_release_rads": float(omega_at_release),
+            "peak_abs_near_release_rads": float(near_omega_peak),
+            "peak_abs_near_release_frame": int(near_omega_frame),
+            "near_window_ms": int(args.near_ms),
+            "note": "Omega from 2D forearm segment angle (elbow->wrist)."
+        },
+        "ball_release_speed_proxy": {
+            "method": "Mode A proxy (wrist speed at release)",
+            "proxy_mps": float(speed_at_release),
+            "proxy_kmh": float(speed_at_release * 3.6),
+            "note": "Proxy only. Wrist speed correlates with ball speed but is not equal."
+        }
     }
 
-def stabilize_left_right_labels(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Fix left/right flipping using ONLY columns that exist.
-    For this wrist_velocity script, we stabilize using:
-      left_elbow, right_elbow, left_wrist, right_wrist
-    If you later include more joints, this will automatically use them too.
-    """
+    with open(summary_out, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2)
+    print(f"📌 Saved summary JSON: {summary_out}")
 
-    # Candidate paired joints in priority order
-    candidate_pairs = [
-        ("left_wrist", "right_wrist"),
-        ("left_elbow", "right_elbow"),
-        ("left_shoulder", "right_shoulder"),
-        ("left_hip", "right_hip"),
-        ("left_knee", "right_knee"),
-        ("left_ankle", "right_ankle"),
-        ("left_eye", "right_eye"),
-        ("left_ear", "right_ear"),
-    ]
-
-    # Keep only pairs that actually exist in df
-    pairs = []
-    for L, R in candidate_pairs:
-        if f"{L}_x" in df.columns and f"{L}_y" in df.columns and f"{R}_x" in df.columns and f"{R}_y" in df.columns:
-            pairs.append((L, R))
-
-    # If nothing to stabilize, return as-is
-    if len(pairs) == 0 or len(df) < 2:
-        return df
-
-    def get_xy(row, name):
-        return np.array([row[f"{name}_x"], row[f"{name}_y"]], dtype=float)
-
-    def frame_cost(prev_row, cur_row, swapped: bool) -> float:
-        total = 0.0
-        for L, R in pairs:
-            # choose current L/R depending on swap
-            if not swapped:
-                Lc = get_xy(cur_row, L)
-                Rc = get_xy(cur_row, R)
-            else:
-                Lc = get_xy(cur_row, R)
-                Rc = get_xy(cur_row, L)
-
-            Lp = get_xy(prev_row, L)
-            Rp = get_xy(prev_row, R)
-
-            if np.all(np.isfinite(Lc)) and np.all(np.isfinite(Lp)):
-                total += float(np.linalg.norm(Lc - Lp))
-            if np.all(np.isfinite(Rc)) and np.all(np.isfinite(Rp)):
-                total += float(np.linalg.norm(Rc - Rp))
-        return total
-
-    def apply_swap(row):
-        row = row.copy()
-        for L, R in pairs:
-            row[f"{L}_x"], row[f"{R}_x"] = row[f"{R}_x"], row[f"{L}_x"]
-            row[f"{L}_y"], row[f"{R}_y"] = row[f"{R}_y"], row[f"{L}_y"]
-        return row
-
-    rows = df.to_dict(orient="records")
-    stabilized = [rows[0]]
-
-    for i in range(1, len(rows)):
-        prev = stabilized[-1]
-        cur = rows[i]
-
-        cost_keep = frame_cost(prev, cur, swapped=False)
-        cost_swap = frame_cost(prev, cur, swapped=True)
-
-        if cost_swap < cost_keep:
-            stabilized.append(apply_swap(cur))
-        else:
-            stabilized.append(cur)
-
-    return pd.DataFrame(stabilized)
-
-def write_wrist_velocity_annotated_video(
-    video_path,
-    df,
-    fps,
-    out_path,
-    release_frame,
-    peak_frame,
-    meters_per_pixel,
-    slow_mo_factor=4
-):
-    cap = cv2.VideoCapture(video_path)
+    # ---------------- Annotated video ----------------
+    cap = cv2.VideoCapture(str(args.video))
     if not cap.isOpened():
-        raise RuntimeError("Could not open video for annotation.")
+        raise RuntimeError("Cannot open video for annotation")
 
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # clamp range
+    start_frame = max(1, int(start_frame))
+    end_frame = min(int(end_frame), total_frames)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame - 1)
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(out_path, fourcc, float(fps), (width, height))
+    out = cv2.VideoWriter(
+        str(annotated_out),
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        float(fps),
+        (width, height)
+    )
 
-    print("\n🎬 Writing annotated wrist velocity video...")
+    slow_factor = 4
+    pause_rel = int(1.2 * fps)
+    pause_peak = int(0.9 * fps)
 
-    frame_no = 0
-    while True:
+    frame_no = start_frame
+    while frame_no <= end_frame:
         ret, frame = cap.read()
         if not ret:
             break
 
-        frame_no += 1
-        idx = frame_no - 1
-        if idx >= len(df):
+        idx = frame_to_idx(df, frame_no)
+        if idx is None:
             break
 
-        # Get smoothed values
-        wx = int(df.loc[idx, "wrist_x_sm"])
-        wy = int(df.loc[idx, "wrist_y_sm"])
-        ex = int(df.loc[idx, "elbow_x_sm"])
-        ey = int(df.loc[idx, "elbow_y_sm"])
-
-        speed_mps = df.loc[idx, "wrist_speed_mps_sm"]
-        speed_kmh = speed_mps * 3.6
-        omega = df.loc[idx, "wrist_angular_vel_rads_sm"]
-
-        # Draw elbow + wrist
-        cv2.circle(frame, (wx, wy), 6, (0, 255, 0), -1)
-        cv2.circle(frame, (ex, ey), 6, (255, 0, 0), -1)
-
-        # Draw forearm line
-        cv2.line(frame, (ex, ey), (wx, wy), (255, 255, 255), 2)
-
-        # Draw velocity vector (scaled for visibility)
-        scale = 0.05
-        vx = df.loc[idx, "wrist_vx_mps"]
-        vy = df.loc[idx, "wrist_vy_mps"]
-        end_x = int(wx + vx / meters_per_pixel * scale)
-        end_y = int(wy + vy / meters_per_pixel * scale)
-
-        cv2.arrowedLine(frame, (wx, wy), (end_x, end_y), (0, 255, 255), 3)
-
-        y0 = 35
-        cv2.putText(frame, f"Frame: {frame_no}", (20, y0),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2)
-
-        cv2.putText(frame, f"Wrist Speed: {speed_mps:.2f} m/s ({speed_kmh:.1f} km/h)",
-                    (20, y0+35), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2)
-
-        cv2.putText(frame, f"Angular Velocity: {omega:.2f} rad/s",
-                    (20, y0+70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2)
-
+        label_lines = []
         if frame_no == release_frame:
-            cv2.putText(frame, "RELEASE", (width-220, 60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0,255,255), 3)
+            label_lines.append("EVENT: RELEASE")
+        if frame_no == near_frame:
+            label_lines.append("EVENT: PEAK SPEED (near release)")
 
-        if frame_no == peak_frame:
-            cv2.putText(frame, "PEAK WRIST SPEED", (width-350, 110),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,0,255), 3)
+        wrist_xy = np.array([wx[idx], wy[idx]], dtype=float) if np.isfinite([wx[idx], wy[idx]]).all() else None
+        elbow_xy = np.array([ex[idx], ey[idx]], dtype=float) if np.isfinite([ex[idx], ey[idx]]).all() else None
 
-        # Slow motion by duplicating frames
-        for _ in range(slow_mo_factor):
+        draw_overlay(
+            frame=frame,
+            frame_no=frame_no,
+            label_lines=label_lines,
+            wrist_xy=wrist_xy,
+            elbow_xy=elbow_xy,
+            speed_mps=float(speed_mps_sm[idx]) if np.isfinite(speed_mps_sm[idx]) else 0.0,
+            omega_rads=float(omega_sm[idx]) if np.isfinite(omega_sm[idx]) else 0.0
+        )
+
+        repeats = slow_factor
+        if frame_no == release_frame:
+            repeats += pause_rel
+        if frame_no == near_frame:
+            repeats += pause_peak
+
+        for _ in range(repeats):
             out.write(frame)
 
-        if frame_no % 100 == 0:
-            print(f"  Processed {frame_no}")
+        frame_no += 1
 
     cap.release()
     out.release()
-    print("✅ Annotated wrist velocity video saved.")
+    print(f"🎥 Saved annotated video: {annotated_out}")
+    print("✅ Done.")
 
-def plot_series(time_s, y, out_png, title, ylabel):
-    plt.figure(figsize=(10, 4))
-    plt.plot(time_s, y)
-    plt.xlabel("Time (s)")
-    plt.ylabel(ylabel)
-    plt.title(title)
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(out_png, dpi=200)
-    plt.close()
-
-    
-
-# =========================
-# MAIN
-# =========================
-def main():
-    ensure_dir(OUT_DIR)
-
-    # 1) Calibration
-    meters_per_pixel = calibrate_pixels_to_m(VIDEO_PATH, STUMP_HEIGHT_M)
-
-    # 2) Load pose model
-    pose_model = YOLO(MODEL_PATH)
-
-    # 3) Video info
-    cap = cv2.VideoCapture(VIDEO_PATH)
-    if not cap.isOpened():
-        raise RuntimeError("Could not open video.")
-
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = float(cap.get(cv2.CAP_PROP_FPS) or 30.0)
-    dt = 1.0 / fps
-
-    elbow_name, wrist_name = pick_arm_points(BOWLING_ARM)
-    print(f"\n🎥 Frames={total_frames}, FPS={fps:.2f}")
-    print(f"🧤 Bowling arm={BOWLING_ARM} -> elbow={elbow_name}, wrist={wrist_name}")
-    print(f"🎯 Release detect mode: {RELEASE_DETECT_MODE}")
-
-    # 4) Extract elbow + wrist keypoints
-    rows = []
-    frame_num = 0
-    print("\n⏳ Extracting wrist/elbow keypoints with YOLO pose...")
-
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            break
-        frame_num += 1
-
-        data = {"frame": frame_num}
-        for p in SELECTED_POINTS:
-            data[f"{p}_x"] = np.nan
-            data[f"{p}_y"] = np.nan
-
-        res = pose_model.predict(frame, verbose=False)
-        if len(res) > 0 and res[0].keypoints is not None and len(res[0].keypoints) > 0:
-            kps = res[0].keypoints.xy
-            if kps is not None and len(kps) > 0:
-                pts = kps[0].cpu().numpy()  # (17,2)
-                for i, name in enumerate(KEYPOINT_NAMES):
-                    if name in SELECTED_POINTS:
-                        data[f"{name}_x"] = float(pts[i, 0])
-                        data[f"{name}_y"] = float(pts[i, 1])
-
-        rows.append(data)
-
-        if frame_num % 150 == 0:
-            print(f"  Processed {frame_num}/{total_frames}...")
-
-    cap.release()
-
-    df = pd.DataFrame(rows)
-    df.to_csv(KEYPOINT_CSV, index=False)
-    print(f"\n✅ Saved keypoints CSV: {KEYPOINT_CSV}")
-
-    # 5) Fill missing (simple; keeps script robust)
-    df = pd.read_csv(KEYPOINT_CSV)
-    df.ffill(inplace=True)
-    df.bfill(inplace=True)
-
-    df = stabilize_left_right_labels(df)
-
-    # 6) Smooth wrist & elbow coords
-    wx = smooth_signal(df[f"{wrist_name}_x"].values.astype(float), SMOOTH_WINDOW, SMOOTH_POLY)
-    wy = smooth_signal(df[f"{wrist_name}_y"].values.astype(float), SMOOTH_WINDOW, SMOOTH_POLY)
-    ex = smooth_signal(df[f"{elbow_name}_x"].values.astype(float), SMOOTH_WINDOW, SMOOTH_POLY)
-    ey = smooth_signal(df[f"{elbow_name}_y"].values.astype(float), SMOOTH_WINDOW, SMOOTH_POLY)
-
-    df["wrist_x_sm"] = wx
-    df["wrist_y_sm"] = wy
-    df["elbow_x_sm"] = ex
-    df["elbow_y_sm"] = ey
-
-    # 7) Wrist linear velocity (m/s)
-    vx_px = central_diff(wx, dt)
-    vy_px = central_diff(wy, dt)
-
-    vx_m = vx_px * meters_per_pixel
-    vy_m = vy_px * meters_per_pixel
-    wrist_speed_mps = np.sqrt(vx_m * vx_m + vy_m * vy_m)
-
-    # smooth speed slightly (helps peak stability)
-    wrist_speed_mps_sm = smooth_signal(wrist_speed_mps, SMOOTH_WINDOW, SMOOTH_POLY)
-
-    df["wrist_vx_mps"] = vx_m
-    df["wrist_vy_mps"] = vy_m
-    df["wrist_speed_mps"] = wrist_speed_mps
-    df["wrist_speed_mps_sm"] = wrist_speed_mps_sm
-    df["wrist_speed_kmh_sm"] = wrist_speed_mps_sm * 3.6
-
-    # 8) Wrist angular velocity (rad/s) of forearm segment (elbow->wrist)
-    # angle of vector (wrist - elbow)
-    theta = np.arctan2((wy - ey), (wx - ex))  # radians
-    theta_u = unwrap_angle(theta)
-    omega = central_diff(theta_u, dt)         # rad/s
-    omega_sm = smooth_signal(omega, SMOOTH_WINDOW, SMOOTH_POLY)
-
-    df["forearm_angle_rad"] = theta_u
-    df["wrist_angular_vel_rads"] = omega
-    df["wrist_angular_vel_rads_sm"] = omega_sm
-
-    # 9) Detect release frame
-    release_idx, release_frame = find_release_frame(
-        df, fps,
-        wrist_col_y_sm=df["wrist_y_sm"].values.astype(float),
-        wrist_speed_sm=wrist_speed_mps_sm
-    )
-
-    # Peak wrist velocity (in full clip) + near release window
-    peak_idx = int(np.nanargmax(wrist_speed_mps_sm))
-    peak_frame = int(df.loc[peak_idx, "frame"])
-    peak_speed_mps = float(wrist_speed_mps_sm[peak_idx])
-
-    # “peak near release”: within ±N frames of release (better for delivery analysis)
-    window = int(round(0.12 * fps))  # ~120 ms each side
-    a = max(0, release_idx - window)
-    b = min(len(df) - 1, release_idx + window)
-    near_idx = a + int(np.nanargmax(wrist_speed_mps_sm[a:b+1]))
-    near_frame = int(df.loc[near_idx, "frame"])
-    near_peak_mps = float(wrist_speed_mps_sm[near_idx])
-
-    # Peak angular vel near release
-    near_omega = omega_sm[a:b+1]
-    near_omega_idx = a + int(np.nanargmax(np.abs(near_omega)))
-    near_omega_frame = int(df.loc[near_omega_idx, "frame"])
-    near_omega_peak = float(omega_sm[near_omega_idx])
-
-    # Wrist speed at release (proxy)
-    wrist_at_release_mps = float(wrist_speed_mps_sm[release_idx])
-    wrist_at_release_kmh = wrist_at_release_mps * 3.6
-
-    print(f"\n🎯 Release frame: {release_frame} (idx={release_idx})")
-    # Time axis
-    df["time_s"] = (df["frame"].values.astype(float) - 1.0) / float(fps)
-
-    # Plot wrist speed (km/h) vs time
-    plot_series(
-        time_s=df["time_s"].values,
-        y=df["wrist_speed_kmh_sm"].values,
-        out_png=SPEED_PLOT_PNG,
-        title="Wrist Speed vs Time",
-        ylabel="Speed (km/h)"
-    )
-
-    # Plot angular velocity (rad/s) vs time
-    plot_series(
-        time_s=df["time_s"].values,
-        y=df["wrist_angular_vel_rads_sm"].values,
-        out_png=OMEGA_PLOT_PNG,
-        title="Forearm Angular Velocity vs Time",
-        ylabel="Angular velocity (rad/s)"
-    )
-
-    print(f"📈 Saved speed plot: {SPEED_PLOT_PNG}")
-    print(f"📈 Saved omega plot: {OMEGA_PLOT_PNG}")
-    print(f"🧤 Wrist speed @ release: {wrist_at_release_mps:.2f} m/s ({wrist_at_release_kmh:.1f} km/h)")
-    print(f"📈 Peak wrist speed (overall): {peak_speed_mps:.2f} m/s at frame {peak_frame}")
-    print(f"📈 Peak wrist speed (near release): {near_peak_mps:.2f} m/s at frame {near_frame}")
-    print(f"🌀 Peak |angular| velocity near release: {near_omega_peak:.2f} rad/s at frame {near_omega_frame}")
-
-    # 10) Ball speed estimation
-    # Mode A (proxy): ball speed ≈ wrist speed at release (CORRELATED, not equal)
-    ball_speed_proxy = {
-        "method": "Mode A (proxy)",
-        "ball_speed_proxy_mps": wrist_at_release_mps,
-        "ball_speed_proxy_kmh": wrist_at_release_kmh,
-        "note": (
-            "Proxy estimate using wrist speed at detected release. "
-            "Literature: wrist velocity correlates with ball release speed, but not identical."
-        )
-    }
-
-    # Mode B (if ball detector is provided)
-    ball_speed_mode_b = None
-    if BALL_MODEL_PATH is not None:
-        print("\n⚾ Ball speed Mode B enabled (ball detector model provided).")
-        ball_model = YOLO(BALL_MODEL_PATH)
-        ball_speed_mode_b = compute_ball_speed_mode_b(
-            video_path=VIDEO_PATH,
-            release_frame=release_frame,
-            meters_per_pixel=meters_per_pixel,
-            fps=fps,
-            ball_model=ball_model,
-            n_frames=BALL_TRACK_FRAMES
-        )
-        if ball_speed_mode_b is None:
-            print("⚠️ Could not compute Mode B ball speed (no reliable detections).")
-        else:
-            print(f"⚾ Ball speed (Mode B avg): {ball_speed_mode_b['ball_speed_avg_kmh']:.1f} km/h")
-            print(f"⚾ Ball speed (Mode B peak): {ball_speed_mode_b['ball_speed_peak_kmh']:.1f} km/h")
-
-    # 11) Save time series CSV (so you can plot in Excel / Python later)
-    df_out = df[[
-        "frame",
-        "wrist_x_sm", "wrist_y_sm",
-        "elbow_x_sm", "elbow_y_sm",
-        "wrist_vx_mps", "wrist_vy_mps",
-        "wrist_speed_mps_sm", "wrist_speed_kmh_sm",
-        "forearm_angle_rad",
-        "wrist_angular_vel_rads_sm",
-    ]].copy()
-    df_out.to_csv(TIMESERIES_CSV, index=False)
-    print(f"\n📌 Saved wrist time-series: {TIMESERIES_CSV}")
-
-    # 12) Save summary metrics JSON
-    metrics = {
-        "video": os.path.basename(VIDEO_PATH),
-        "fps": fps,
-        "bowling_arm": BOWLING_ARM,
-        "release_detect_mode": RELEASE_DETECT_MODE,
-        "calibration": {
-            "stump_height_m": float(STUMP_HEIGHT_M),
-            "meters_per_pixel": float(meters_per_pixel),
-        },
-        "release": {
-            "release_idx": int(release_idx),
-            "release_frame": int(release_frame),
-        },
-        "wrist_linear_velocity": {
-            "wrist_speed_at_release_mps": wrist_at_release_mps,
-            "wrist_speed_at_release_kmh": wrist_at_release_kmh,
-            "peak_wrist_speed_overall_mps": peak_speed_mps,
-            "peak_wrist_speed_overall_frame": int(peak_frame),
-            "peak_wrist_speed_near_release_mps": near_peak_mps,
-            "peak_wrist_speed_near_release_frame": int(near_frame),
-        },
-        "wrist_angular_velocity": {
-            "peak_abs_angular_vel_near_release_rads": float(near_omega_peak),
-            "peak_abs_angular_vel_near_release_frame": int(near_omega_frame),
-            "note": "Angular velocity computed from forearm segment angle (elbow->wrist) in 2D."
-        },
-        "ball_release_speed_estimates": {
-            "proxy_mode_a": ball_speed_proxy,
-            "mode_b_ball_tracking": ball_speed_mode_b
-        }
-    }
-
-    with open(METRICS_JSON, "w", encoding="utf-8") as f:
-        json.dump(metrics, f, indent=2)
-    print(f"📌 Saved metrics JSON: {METRICS_JSON}")
-
-    
-
-    print("\n✅ Done.")
-
-        # 13) Optional: write annotated video with wrist velocity vectors
-    annotated_path = os.path.join(OUT_DIR, "wrist_velocity_annotated.mp4")
-    write_wrist_velocity_annotated_video(
-        video_path=VIDEO_PATH,
-        df=df,
-        fps=fps,
-        out_path=annotated_path,
-        release_frame=release_frame,
-        peak_frame=near_frame,
-        meters_per_pixel=meters_per_pixel,
-        slow_mo_factor=4
-    )
-
-    print(f"📁 Annotated video saved: {annotated_path}")
 
 if __name__ == "__main__":
     main()
