@@ -9,7 +9,7 @@ from scipy.signal import savgol_filter, find_peaks
 # =========================
 # SETTINGS
 # =========================
-VIDEO_PATH = "video.mp4"
+VIDEO_PATH = "data/side 1.MOV"
 MODEL_PATH = "yolov8n-pose.pt"
 OUTPUT_DIR = "output"
 ANNOTATED_VIDEO = f"{OUTPUT_DIR}/annotated_delivery_stride.mp4"

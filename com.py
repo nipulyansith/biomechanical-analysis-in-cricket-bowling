@@ -24,17 +24,18 @@ import os
 import json
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from ultralytics import YOLO
 from scipy.signal import savgol_filter, find_peaks
 
 # =========================
 # USER SETTINGS
 # =========================
-VIDEO_PATH = "front2.MOV"
-VIEW_MODE = "FRONT"   # "SIDE" (90°) or "FRONT" (0°)
+VIDEO_PATH = "data/side3.MOV"  # path to your input video
+VIEW_MODE = "SIDE"   # "SIDE" (90°) or "FRONT" (0°)
 
 # NEW: set which arm the bowler uses
-BOWLING_ARM = "RIGHT"  # "RIGHT" or "LEFT"
+BOWLING_ARM = "LEFT"  # "RIGHT" or "LEFT"
 
 MODEL_PATH = "yolov8n-pose.pt"
 
@@ -42,6 +43,12 @@ OUT_DIR = "output"
 KEYPOINT_CSV = os.path.join(OUT_DIR, "yolo_keypoints.csv")
 METRICS_JSON = os.path.join(OUT_DIR, "head_metrics.json")
 METRICS_CSV = os.path.join(OUT_DIR, "head_metrics.csv")
+
+# Plot outputs
+DX_PLOT_PNG = os.path.join(OUT_DIR, "comDx_vs_time.png")
+DX_PLOT_CSV = os.path.join(OUT_DIR, "comDx_vs_time.csv")
+HEAD_DX_PLOT_PNG = os.path.join(OUT_DIR, "headDx_vs_time.png")
+HEAD_DX_PLOT_CSV = os.path.join(OUT_DIR, "headDx_vs_time.csv")
 
 # Smoothing
 SMOOTH_WINDOW = 9  # must be odd; will auto-fix if too large
@@ -193,6 +200,20 @@ def detect_peaks(sig, fps, prominence):
     min_distance_frames = max(3, int(0.06 * fps))  # ~60ms
     peaks, props = find_peaks(sig, distance=min_distance_frames, prominence=prominence)
     return peaks, props
+
+def plot_metric_over_time(df_seg, time_col, metric_col, out_png, title):
+    x = df_seg[time_col].values.astype(float)
+    y = df_seg[metric_col].values.astype(float)
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(x, y)
+    plt.xlabel("Time (s)")
+    plt.ylabel(metric_col)
+    plt.title(title)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=200)
+    plt.close()
 
 # =========================
 # CALIBRATION (CLICK STUMP TOP + BOTTOM)
@@ -434,6 +455,9 @@ def main():
     df.ffill(inplace=True)
     df.bfill(inplace=True)
 
+    # Time column
+    df["time_s"] = (df["frame"].values.astype(float) - 1.0) / float(fps)
+
     # 5) Compute head proxy point per frame (mean of face points)
     head_x, head_y = [], []
     for i in range(len(df)):
@@ -447,6 +471,11 @@ def main():
     hip_mid_x, hip_mid_y = midpoint(df, "left_hip", "right_hip")
     df["hip_mid_x"] = hip_mid_x
     df["hip_mid_y"] = hip_mid_y
+
+    # ---- COM proxy (2D) = weighted pelvis + head ----
+    # If head is missing, fallback to pelvis
+    df["com_x"] = np.where(np.isfinite(df["head_x"]), 0.65*df["hip_mid_x"] + 0.35*df["head_x"], df["hip_mid_x"])
+    df["com_y"] = np.where(np.isfinite(df["head_y"]), 0.65*df["hip_mid_y"] + 0.35*df["head_y"], df["hip_mid_y"])
 
     # 7) Release frame detection (arm-aware)
     if RELEASE_MODE == "AUTO":
@@ -559,6 +588,36 @@ def main():
 
     print(f"\n🦶 Detected front ankle: {front_ankle} (direction={direction}, view={VIEW_MODE})")
     print(f"✅ FFC: idx={ffc_idx}, frame={ffc_frame}")
+
+    # =========================
+    # VIDEO Dx OVER TIME (matches annotated video values)
+    # =========================
+
+    # Smooth both head_x and front-foot x (optional but makes plot cleaner)
+    df["head_x_sm"] = smooth_signal(df["head_x"].values.astype(float), SMOOTH_WINDOW, SMOOTH_POLY)
+    df[f"{front_ankle}_x_sm"] = smooth_signal(df[f"{front_ankle}_x"].values.astype(float), SMOOTH_WINDOW, SMOOTH_POLY)
+
+    # This matches your video overlay logic (but smoothed for stability)
+    df["videoDx_px"] = df["head_x_sm"].values - df[f"{front_ankle}_x_sm"].values
+    df["videoDx_cm"] = df["videoDx_px"].values * float(cm_per_pixel)
+
+    # Segment from FFC → Release
+    seg = df.iloc[ffc_idx:release_idx+1].copy()
+
+    # Save CSV
+    seg[["frame", "time_s", "videoDx_px", "videoDx_cm"]].to_csv(HEAD_DX_PLOT_CSV, index=False)
+    print(f"📌 Saved VIDEO Dx CSV: {HEAD_DX_PLOT_CSV}")
+
+    # Plot graph
+    plot_metric_over_time(
+        df_seg=seg,
+        time_col="time_s",
+        metric_col="videoDx_cm",
+        out_png=HEAD_DX_PLOT_PNG,
+        title="VIDEO Dx vs Time (FFC→Release)"
+    )
+    print(f"📈 Saved VIDEO Dx plot: {HEAD_DX_PLOT_PNG}")
+
     if bfc_idx is not None:
         print(f"✅ BFC: idx={bfc_idx}, frame={bfc_frame}")
     else:
