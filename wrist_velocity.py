@@ -29,13 +29,14 @@ import cv2
 import json
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from ultralytics import YOLO
 from scipy.signal import savgol_filter
 
 # =========================
 # USER SETTINGS
 # =========================
-VIDEO_PATH = "side 1.MOV"
+VIDEO_PATH = "data/side3.MOV"
 
 # RIGHT or LEFT arm bowler (IMPORTANT)
 BOWLING_ARM = "LEFT"  # "RIGHT" or "LEFT"
@@ -51,6 +52,8 @@ OUT_DIR = "output_wrist_speed"
 KEYPOINT_CSV = os.path.join(OUT_DIR, "yolo_keypoints.csv")
 METRICS_JSON = os.path.join(OUT_DIR, "wrist_ball_metrics.json")
 TIMESERIES_CSV = os.path.join(OUT_DIR, "wrist_timeseries.csv")
+SPEED_PLOT_PNG = os.path.join(OUT_DIR, "wrist_speed_vs_time.png")
+OMEGA_PLOT_PNG = os.path.join(OUT_DIR, "wrist_omega_vs_time.png")
 
 # Smoothing (for derivatives)
 SMOOTH_WINDOW = 9   # odd preferred
@@ -426,6 +429,17 @@ def write_wrist_velocity_annotated_video(
     out.release()
     print("✅ Annotated wrist velocity video saved.")
 
+def plot_series(time_s, y, out_png, title, ylabel):
+    plt.figure(figsize=(10, 4))
+    plt.plot(time_s, y)
+    plt.xlabel("Time (s)")
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=200)
+    plt.close()
+
     
 
 # =========================
@@ -568,6 +582,29 @@ def main():
     wrist_at_release_kmh = wrist_at_release_mps * 3.6
 
     print(f"\n🎯 Release frame: {release_frame} (idx={release_idx})")
+    # Time axis
+    df["time_s"] = (df["frame"].values.astype(float) - 1.0) / float(fps)
+
+    # Plot wrist speed (km/h) vs time
+    plot_series(
+        time_s=df["time_s"].values,
+        y=df["wrist_speed_kmh_sm"].values,
+        out_png=SPEED_PLOT_PNG,
+        title="Wrist Speed vs Time",
+        ylabel="Speed (km/h)"
+    )
+
+    # Plot angular velocity (rad/s) vs time
+    plot_series(
+        time_s=df["time_s"].values,
+        y=df["wrist_angular_vel_rads_sm"].values,
+        out_png=OMEGA_PLOT_PNG,
+        title="Forearm Angular Velocity vs Time",
+        ylabel="Angular velocity (rad/s)"
+    )
+
+    print(f"📈 Saved speed plot: {SPEED_PLOT_PNG}")
+    print(f"📈 Saved omega plot: {OMEGA_PLOT_PNG}")
     print(f"🧤 Wrist speed @ release: {wrist_at_release_mps:.2f} m/s ({wrist_at_release_kmh:.1f} km/h)")
     print(f"📈 Peak wrist speed (overall): {peak_speed_mps:.2f} m/s at frame {peak_frame}")
     print(f"📈 Peak wrist speed (near release): {near_peak_mps:.2f} m/s at frame {near_frame}")
