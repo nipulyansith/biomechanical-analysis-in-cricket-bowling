@@ -5,372 +5,336 @@ import os
 from ultralytics import YOLO
 from scipy.signal import savgol_filter, find_peaks
 
-# =========================
-# SETTINGS
-# =========================
-VIDEO_PATH = "data/side2.MOV"
-MODEL_PATH = "yolov8n-pose.pt"
-OUTPUT_DIR = "output"
-
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-KEYPOINTS_CSV = f"{OUTPUT_DIR}/runup_step_keypoints.csv"
-DEBUG_CSV     = f"{OUTPUT_DIR}/runup_step_debug.csv"
-DURATIONS_CSV = f"{OUTPUT_DIR}/final5_step_durations.csv"
-EVENTS_CSV    = f"{OUTPUT_DIR}/final5_step_events.csv"
-ANNOTATED_VIDEO = f"{OUTPUT_DIR}/annotated_final5_steps.mp4"
-
-# Smoothing (must be odd)
-SMOOTH_WINDOW = 9
+# === SETTINGS ===
+VIDEO_PATH = "data/side4.MOV"                     # Input video
+OUTPUT_CSV = "output/yolo_keypoints_left.csv"     # Output CSV
+MODEL_PATH = "yolov8n-pose.pt"               # Model file
+SMOOTH_WINDOW = 7                            # Must be odd
 SMOOTH_POLY = 2
+BOWLING_ARM = "left"   # "right" or "left"
 
-# Release detection: only search in last N seconds (prevents early false "highest wrist")
-RELEASE_TAIL_SECONDS = 3.5
-
-# Peak detection:
-# distance: min frames between same-foot contacts (auto from FPS)
-# prominence: adaptive (auto from signal) + multiplier
-PROM_MULT = 0.7
-
-# Alternation enforcement
-MIN_GAP_BETWEEN_CONTACTS_S = 0.10  # reject contacts closer than this (likely noise)
-
-FINAL_CONTACT_COUNT = 5
-
-# =========================
-# USER INPUT
-# =========================
-bowling_hand = input("Enter bowling hand (R/L): ").strip().upper()
-if bowling_hand not in ["R", "L"]:
-    raise ValueError("❌ Enter only R or L")
-
-BOWLING_WRIST = "right_wrist" if bowling_hand == "R" else "left_wrist"
-print(f"🎯 Bowling wrist: {BOWLING_WRIST}")
-
-# =========================
-# LOAD MODEL & VIDEO
-# =========================
+# === Load YOLO Pose Model ===
 model = YOLO(MODEL_PATH)
+
+# === Open Video ===
 cap = cv2.VideoCapture(VIDEO_PATH)
 if not cap.isOpened():
-    raise IOError("❌ Cannot open video")
+    print("Error: Could not open video.")
+    exit()
 
-fps = cap.get(cv2.CAP_PROP_FPS) or 30
-width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-print(f"🎥 Video: {total_frames} frames @ {fps:.2f} FPS")
+fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+print(f"🎥 Total frames in video: {total_frames}, FPS: {fps:.2f}")
 
-# Auto peak distance based on fps (roughly prevents double-contacts)
-PEAK_DISTANCE = int(max(6, round(0.20 * fps)))  # ~0.20s
-MIN_GAP_FRAMES = int(max(2, round(MIN_GAP_BETWEEN_CONTACTS_S * fps)))
-
-# =========================
-# KEYPOINT SETUP
-# =========================
-KEYPOINT_NAMES = [
-    "nose","left_eye","right_eye","left_ear","right_ear",
-    "left_shoulder","right_shoulder","left_elbow","right_elbow",
-    "left_wrist","right_wrist","left_hip","right_hip",
-    "left_knee","right_knee","left_ankle","right_ankle"
-]
-SELECTED = ["left_ankle", "right_ankle", "left_wrist", "right_wrist"]
-
-# =========================
-# EXTRACT KEYPOINTS
-# =========================
+frame_num = 0
 rows = []
-frame_no = 0
-print("⏳ Extracting keypoints...")
 
+# === YOLO Keypoints names (17 keypoints in COCO format) ===
+KEYPOINT_NAMES = [
+    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist", "left_hip", "right_hip",
+    "left_knee", "right_knee", "left_ankle", "right_ankle"
+]
+
+SELECTED_POINTS = [
+    "left_wrist", "right_wrist",
+    "left_elbow", "right_elbow",
+    "left_shoulder", "right_shoulder",
+    "left_hip", "right_hip",
+    "left_knee", "right_knee",
+    "left_ankle", "right_ankle"
+]
+
+# === Ensure output folder exists ===
+os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
+
+print("⏳ Processing video (extracting YOLO keypoints)...")
+
+# === Loop through video frames ===
 while True:
     ret, frame = cap.read()
     if not ret:
         break
 
-    frame_no += 1
-    row = {"frame": frame_no}
+    frame_num += 1
+    data = {"frame": frame_num}
 
-    for k in SELECTED:
-        row[f"{k}_x"] = np.nan
-        row[f"{k}_y"] = np.nan
+    # Initialize with NaN
+    for name in SELECTED_POINTS:
+        data[f"{name}_x"] = np.nan
+        data[f"{name}_y"] = np.nan
 
+    # Run YOLO inference
     results = model.predict(frame, verbose=False)
 
-    if results and results[0].keypoints is not None and len(results[0].keypoints.xy) > 0:
-        kps_all = results[0].keypoints.xy.cpu().numpy()
-        boxes = results[0].boxes.xywh.cpu().numpy()
-
-        # Pick main person (largest box)
-        areas = boxes[:, 2] * boxes[:, 3]
-        idx = int(np.argmax(areas))
-        kps = kps_all[idx]
-
+    if len(results) > 0 and len(results[0].keypoints) > 0:
+        keypoints = results[0].keypoints.xy[0].cpu().numpy()  # shape (17, 2)
         for i, name in enumerate(KEYPOINT_NAMES):
-            if name in SELECTED:
-                row[f"{name}_x"] = float(kps[i, 0])
-                row[f"{name}_y"] = float(kps[i, 1])
+            if name in SELECTED_POINTS:
+                data[f"{name}_x"] = keypoints[i, 0]
+                data[f"{name}_y"] = keypoints[i, 1]
 
-    rows.append(row)
+    rows.append(data)
+    if frame_num % 100 == 0:
+        print(f"Processed {frame_num}/{total_frames} frames...")
 
 cap.release()
 
+# === Save keypoints CSV ===
 df = pd.DataFrame(rows)
+df.to_csv(OUTPUT_CSV, index=False)
+print(f"\n✅ Keypoints extracted for all {total_frames} frames.")
+print(f"📁 Saved to: {OUTPUT_CSV}")
 
-# Fill missing values (keep it, but we'll debug signal quality later)
-df.interpolate(inplace=True)
-df.bfill(inplace=True)
-df.ffill(inplace=True)
+# === Post-process: detect release and last 5-step duration ===
+df = pd.read_csv(OUTPUT_CSV)
+df.fillna(method="ffill", inplace=True)
+df.fillna(method="bfill", inplace=True)
 
-df.to_csv(KEYPOINTS_CSV, index=False)
-print(f"✅ Keypoints saved: {KEYPOINTS_CSV}")
+# --- Build ankle combined signal (higher y = foot on ground) ---
+ankle_signal = np.maximum(df["left_ankle_y"].values, df["right_ankle_y"].values)
 
-# =========================
-# SMOOTH SIGNALS
-# =========================
-def safe_savgol(arr, window, poly):
-    arr = np.asarray(arr, dtype=float)
-    n = len(arr)
-    w = window
-    if n < 5:
-        return arr
-    if w >= n:
-        w = n - 1 if (n - 1) % 2 == 1 else n - 2
-    if w < 5:
-        w = 5
-    if w % 2 == 0:
-        w += 1
-        if w >= n:
-            w -= 2
-    return savgol_filter(arr, w, poly)
+# --- Smooth ankle and wrist signals ---
+def make_window(n, length):
+    w = n if n % 2 == 1 else n + 1
+    if w >= length:
+        w = length - 1 if (length - 1) % 2 == 1 else length - 2
+    return max(3, w)
 
-left_y  = df["left_ankle_y"].to_numpy()
-right_y = df["right_ankle_y"].to_numpy()
-wrist_y = df[f"{BOWLING_WRIST}_y"].to_numpy()
+win = make_window(SMOOTH_WINDOW, len(ankle_signal))
+smoothed_ankle = savgol_filter(ankle_signal, window_length=win, polyorder=SMOOTH_POLY)
 
-df["left_ankle_y_s"]  = safe_savgol(left_y,  SMOOTH_WINDOW, SMOOTH_POLY)
-df["right_ankle_y_s"] = safe_savgol(right_y, SMOOTH_WINDOW, SMOOTH_POLY)
-df["wrist_y_s"]       = safe_savgol(wrist_y, SMOOTH_WINDOW, SMOOTH_POLY)
+# --- Choose bowling wrist based on bowling arm ---
+wrist_col = "right_wrist_y" if BOWLING_ARM.lower() == "right" else "left_wrist_y"
 
-# =========================
-# RELEASE DETECTION (tail search)
-# =========================
-tail_frames = int(max(10, round(RELEASE_TAIL_SECONDS * fps)))
-start_idx = max(0, len(df) - tail_frames)
+wrist_signal = df[wrist_col].values
+win_wrist = make_window(SMOOTH_WINDOW, len(wrist_signal))
+smoothed_wrist = savgol_filter(wrist_signal, window_length=win_wrist, polyorder=SMOOTH_POLY)
 
-release_idx = int(df["wrist_y_s"].iloc[start_idx:].idxmin())
+# --- Determine release frame (bowling wrist highest point = min y) ---
+release_idx = int(np.argmin(smoothed_wrist))
 release_frame = int(df.loc[release_idx, "frame"])
-print(f"🏏 Release frame (tail-based): {release_frame}")
+print(f"\n Estimated release frame ({BOWLING_ARM}-arm wrist): index {release_idx} (frame {release_frame})")
 
-# =========================
-# CONTACT DETECTION HELPERS
-# =========================
-def adaptive_prominence(y_signal):
-    """
-    Use robust variability (MAD) to set a prominence threshold automatically.
-    """
-    y = np.asarray(y_signal, dtype=float)
-    med = np.median(y)
-    mad = np.median(np.abs(y - med)) + 1e-9
-    # scaled MAD as variability estimate
-    return float(PROM_MULT * (1.4826 * mad))
+# --- Detect foot-contact peaks (ankle max y = ground contact) ---
+min_distance_frames = max(3, int(0.03 * fps))
+peaks, _ = find_peaks(smoothed_ankle, distance=min_distance_frames, prominence=5)
+peaks_before_release = peaks[peaks < release_idx]
 
-def detect_contacts(y_signal, distance_frames):
-    """
-    In image coords, y increases DOWN, so ground contact is usually local MAX in ankle y.
-    """
-    prom = adaptive_prominence(y_signal)
-    peaks, props = find_peaks(y_signal, distance=distance_frames, prominence=prom)
-    return peaks, prom, props
+if len(peaks_before_release) < 5:
+    peaks_relaxed, _ = find_peaks(smoothed_ankle, distance=min_distance_frames, prominence=1)
+    peaks_before_release = peaks_relaxed[peaks_relaxed < release_idx]
 
-def merge_and_clean_events(left_peaks, right_peaks, left_sig, right_sig):
-    """
-    Merge two lists of peaks into one timeline and remove events too close together.
-    If two events collide, keep the one with higher ankle y (stronger contact).
-    """
-    events = [(int(i), "L") for i in left_peaks] + [(int(i), "R") for i in right_peaks]
-    events.sort(key=lambda x: x[0])
+if len(peaks_before_release) < 5:
+    print(f" Not enough foot-contact peaks found before release (found {len(peaks_before_release)}).")
+else:
+    last_five_idx = peaks_before_release[-5:]
+    last_five_frames = df.loc[last_five_idx, "frame"].astype(int).tolist()
+    contact_times = [f / fps for f in last_five_frames]
+    duration = contact_times[-1] - contact_times[0]
 
-    cleaned = []
-    for idx, foot in events:
-        if idx > release_idx:
-            continue
-        if not cleaned:
-            cleaned.append((idx, foot))
-            continue
+    print("\n Foot contact frame numbers (last 5 before release):", last_five_frames)
+    print(" Foot contact times (s):", [f"{t:.3f}" for t in contact_times])
+    print(f" Duration between first and last of those 5 steps: {duration:.3f} seconds")
 
-        prev_idx, prev_foot = cleaned[-1]
-        if (idx - prev_idx) <= MIN_GAP_FRAMES:
-            # collision: keep stronger peak (bigger y)
-            prev_y = left_sig[prev_idx] if prev_foot == "L" else right_sig[prev_idx]
-            curr_y = left_sig[idx] if foot == "L" else right_sig[idx]
-            if curr_y > prev_y:
-                cleaned[-1] = (idx, foot)
+# --- Save debug CSV ---
+debug_path = os.path.splitext(OUTPUT_CSV)[0] + "_debug.csv"
+pd.DataFrame({
+    "frame": df["frame"].astype(int),
+    "left_ankle_y": df["left_ankle_y"],
+    "right_ankle_y": df["right_ankle_y"],
+    "ankle_combined": ankle_signal,
+    "smoothed_ankle": smoothed_ankle,
+    "bowling_wrist_y": df[wrist_col],
+    "smoothed_wrist": smoothed_wrist
+}).to_csv(debug_path, index=False)
+print(f" Debug signals saved to: {debug_path}")
+
+# === Annotated & Trimmed Video Output with Step Labels ===
+if len(peaks_before_release) >= 5:
+    start_frame = last_five_frames[0]
+    end_frame = release_frame
+    trimmed_output_path = os.path.join(os.path.dirname(OUTPUT_CSV), "yolo_annotated_trimmed_left.mp4")
+
+    cap = cv2.VideoCapture(VIDEO_PATH)
+    if not cap.isOpened():
+        print("Error reopening video for annotation.")
+        exit()
+
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame - 1)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(trimmed_output_path, fourcc, fps, (width, height))
+
+    print(f"\n Generating annotated trimmed video from frame {start_frame} to {end_frame}...")
+
+    frame_index = start_frame
+    step_labels = {f: f"Step {i+1}" for i, f in enumerate(last_five_frames)}
+
+    while frame_index <= end_frame:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # Get keypoints without visualization
+        results = model.predict(frame, verbose=False)
+        annotated = frame.copy()  # Use clean frame
+        
+            # Draw foot contact circle if keypoints detected
+        if len(results) > 0 and len(results[0].keypoints) > 0:
+            keypoints = results[0].keypoints.xy[0].cpu().numpy()
+            
+            # Get ankle positions (indices 15 and 16 for left and right ankle)
+            left_ankle = keypoints[15]
+            right_ankle = keypoints[16]
+            
+            # If this is a foot contact frame, draw highlight circle for landing foot
+            if frame_index in last_five_frames:
+                # Determine landing foot (the one closer to ground, i.e., larger y-coordinate)
+                landing_ankle = None
+                if not np.isnan(left_ankle[1]) and not np.isnan(right_ankle[1]):
+                    landing_ankle = left_ankle if left_ankle[1] > right_ankle[1] else right_ankle
+                elif not np.isnan(left_ankle[1]):
+                    landing_ankle = left_ankle
+                elif not np.isnan(right_ankle[1]):
+                    landing_ankle = right_ankle
+                
+                if landing_ankle is not None:
+                    # Create pulsing effect with larger circles
+                    circle_phase = (frame_index % 30) / 30.0
+                    circle_radius = int(60 + 30 * np.sin(circle_phase * 2 * np.pi))  # Increased base size and pulse range
+                    
+                    # Draw circles with fade-out effect
+                    alpha = 0.7
+                    overlay = annotated.copy()
+                    
+                    center = (int(landing_ankle[0]), int(landing_ankle[1]))
+                    # Larger outer glow
+                    cv2.circle(overlay, center, circle_radius + 20, (0, 255, 255), -1)  # Increased glow size
+                    cv2.circle(overlay, center, circle_radius, (0, 255, 0), 4)  # Thicker circle line
+                    
+                    # Blend the circles with the original frame
+                    cv2.addWeighted(overlay, alpha, annotated, 1 - alpha, 0, annotated)        # --- Add stats box with larger text (centered) ---
+        def draw_stats_box(img, text_lines, font_scale=1.5, vertical_position=None):
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            thickness = 4
+            color = (255, 255, 255)
+            line_spacing = 70  # Increased spacing
+            
+            # Calculate total height and maximum width
+            total_height = line_spacing * len(text_lines)
+            max_width = 0
+            for text in text_lines:
+                (text_width, _), _ = cv2.getTextSize(text, font, font_scale, thickness)
+                max_width = max(max_width, text_width)
+            
+            # Calculate centered position
+            start_x = (width - max_width) // 2
+            if vertical_position is None:
+                start_y = 80  # Default to top if not specified
+            else:
+                # Center vertically around the specified position
+                start_y = vertical_position - (total_height // 2)
+            
+            # Draw semi-transparent background for entire stats box
+            bg_padding = 20
+            overlay = img.copy()
+            cv2.rectangle(overlay, 
+                        (start_x - bg_padding, start_y - 40),
+                        (start_x + max_width + bg_padding, start_y + total_height - 20),
+                        (0, 0, 0),
+                        -1)
+            cv2.addWeighted(overlay, 0.7, img, 0.3, 0, img)  # Blend with 70% opacity
+            
+            # Draw text
+            for i, text in enumerate(text_lines):
+                # Get size for this specific text for centering
+                (text_width, _), _ = cv2.getTextSize(text, font, font_scale, thickness)
+                text_x = (width - text_width) // 2  # Center each line independently
+                cv2.putText(img, text, (text_x, start_y + (i * line_spacing)),
+                          font, font_scale, color, thickness)
+
+        # --- Annotate step frames with large text and pause ---
+        if frame_index in step_labels:
+            label = step_labels[frame_index]
+            current_step_idx = last_five_frames.index(frame_index)
+            current_time = frame_index / fps
+            
+            # Stats to display
+            stats = [
+                f"STEP {current_step_idx + 1} OF 5",
+                f"Frame: {frame_index}",
+                f"Time: {current_time:.2f}s",
+            ]
+            
+            if current_step_idx > 0:
+                time_since_last = (frame_index - last_five_frames[current_step_idx-1]) / fps
+                stats.append(f"Time since last step: {time_since_last:.2f}s")
+            
+            # Draw stats box in center of frame
+            stats_y = height // 2  # Move to vertical center
+            draw_stats_box(annotated, stats, 2.2, vertical_position=stats_y)  # Increased scale for better visibility
+            
+            # Write the same frame multiple times to create longer pause effect
+            for _ in range(int(fps * 1.2)):  # 1.2 second pause (increased from 0.5)
+                out.write(annotated)
         else:
-            cleaned.append((idx, foot))
+            out.write(annotated)
 
-    return cleaned
+        # --- Annotate release frame ---
+        if frame_index == release_frame:
+            text = "BALL RELEASE"
+            font_scale = 4.0  # Increased from 3.0
+            thickness = 6  # Increased from 5
+            (text_width, text_height), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+            text_x = (width - text_width) // 2
+            text_y = height // 3
+            
+            # Add semi-transparent background for release text
+            bg_padding = 40
+            bg_overlay = annotated.copy()
+            cv2.rectangle(bg_overlay, 
+                        (text_x - bg_padding, text_y - text_height - bg_padding),
+                        (text_x + text_width + bg_padding, text_y + bg_padding),
+                        (0, 0, 0),
+                        -1)
+            # Blend with 60% opacity
+            cv2.addWeighted(bg_overlay, 0.6, annotated, 0.4, 0, annotated)
+            
+            # Draw text with outline for extra visibility
+            cv2.putText(annotated, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale, (0, 0, 0), thickness + 4)
+            cv2.putText(annotated, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale, (255, 0, 0), thickness)
+            
+            stats = [
+                f"Release Frame: {release_frame}",
+                f"Release Time: {release_frame/fps:.2f}s",
+                f"Total Duration: {duration:.2f}s"
+            ]
+            draw_stats_box(annotated, stats, 1.8)
+            
+            # Longer pause on release frame
+            for _ in range(int(fps * 1.5)):  # 1.5 second pause (increased from 0.75)
+                out.write(annotated)
+        
+        # Always show duration info with larger text
+        duration_stats = [
+            f"Total Steps: 5",
+            f"Sequence Duration: {duration:.2f}s",
+            f"Avg Step Interval: {duration/4:.2f}s"
+        ]
+        draw_stats_box(annotated, duration_stats, 1.5)
 
-def enforce_alternation(events, left_sig, right_sig):
-    """
-    Force L/R alternation. If same foot repeats, keep the stronger one (higher ankle y).
-    """
-    if not events:
-        return events
+        if frame_index % 10 == 0:
+            print(f"  → Annotated frame {frame_index}/{end_frame}")
 
-    alt = [events[0]]
-    for idx, foot in events[1:]:
-        pidx, pfoot = alt[-1]
-        if foot != pfoot:
-            alt.append((idx, foot))
-        else:
-            # same foot repeat: keep stronger (higher y)
-            prev_y = left_sig[pidx] if pfoot == "L" else right_sig[pidx]
-            curr_y = left_sig[idx] if foot == "L" else right_sig[idx]
-            if curr_y > prev_y:
-                alt[-1] = (idx, foot)
+        frame_index += 1
 
-    return alt
-
-# =========================
-# DETECT CONTACTS
-# =========================
-left_sig  = df["left_ankle_y_s"].to_numpy()
-right_sig = df["right_ankle_y_s"].to_numpy()
-
-left_peaks, left_prom, _ = detect_contacts(left_sig, PEAK_DISTANCE)
-right_peaks, right_prom, _ = detect_contacts(right_sig, PEAK_DISTANCE)
-
-events = merge_and_clean_events(left_peaks, right_peaks, left_sig, right_sig)
-events_alt = enforce_alternation(events, left_sig, right_sig)
-
-# Take final contacts
-final_events = [e for e in events_alt if e[0] <= release_idx]
-final_events = final_events[-FINAL_CONTACT_COUNT:]
-
-if len(final_events) < FINAL_CONTACT_COUNT:
-    print("\n⚠️ Not enough final contacts detected.")
-    print(f"   Found {len(final_events)} contacts, need {FINAL_CONTACT_COUNT}.")
-    print("   Try: increase RELEASE_TAIL_SECONDS, reduce PROM_MULT (e.g. 0.5), or reduce SMOOTH_WINDOW (e.g. 7).")
-
-final_events_frames = [(int(df.loc[idx, "frame"]), foot, idx) for idx, foot in final_events]
-
-print("\n🏃 FINAL 5 CONTACTS (before release)")
-for fr, foot, _ in final_events_frames:
-    print(f"  {foot} contact @ frame {fr}")
-
-# =========================
-# STEP DURATIONS
-# =========================
-step_rows = []
-for j in range(len(final_events_frames) - 1):
-    f1, foot1, _ = final_events_frames[j]
-    f2, foot2, _ = final_events_frames[j + 1]
-    dt = (f2 - f1) / fps
-    step_rows.append({
-        "step_index": j + 1,
-        "from_foot": foot1,
-        "to_foot": foot2,
-        "frame_j": f1,
-        "frame_j_plus_1": f2,
-        "fps": float(fps),
-        "step_duration_s": float(dt)
-    })
-
-dur_df = pd.DataFrame(step_rows)
-dur_df.to_csv(DURATIONS_CSV, index=False)
-print(f"\n✅ Saved step durations: {DURATIONS_CSV}")
-
-events_df = pd.DataFrame([{
-    "order": i + 1,
-    "foot": foot,
-    "frame": fr,
-    "idx_in_df": idx
-} for i, (fr, foot, idx) in enumerate(final_events_frames)])
-events_df.to_csv(EVENTS_CSV, index=False)
-print(f"✅ Saved final events: {EVENTS_CSV}")
-
-# =========================
-# DEBUG CSV (very useful)
-# =========================
-dbg = pd.DataFrame({
-    "frame": df["frame"],
-    "left_y_s": left_sig,
-    "right_y_s": right_sig,
-    "wrist_y_s": df["wrist_y_s"].to_numpy(),
-    "is_left_peak": 0,
-    "is_right_peak": 0,
-    "is_final_event": 0
-})
-
-dbg.loc[left_peaks, "is_left_peak"] = 1
-dbg.loc[right_peaks, "is_right_peak"] = 1
-for _, _, idx in final_events_frames:
-    dbg.loc[idx, "is_final_event"] = 1
-
-dbg.to_csv(DEBUG_CSV, index=False)
-print(f"🧪 Debug CSV saved: {DEBUG_CSV}")
-print(f"   left prominence used:  {left_prom:.3f}")
-print(f"   right prominence used: {right_prom:.3f}")
-
-# =========================
-# ANNOTATED VIDEO (slow at events)
-# =========================
-SLOW_FACTOR = 4
-PAUSE_FRAMES = int(fps * 0.5)
-EVENT_WINDOW = int(fps * 0.25)
-
-event_frames = [fr for fr, _, _ in final_events_frames] + [release_frame]
-
-cap = cv2.VideoCapture(VIDEO_PATH)
-out = cv2.VideoWriter(
-    ANNOTATED_VIDEO,
-    cv2.VideoWriter_fourcc(*"mp4v"),
-    fps,
-    (width, height)
-)
-
-frame_no = 0
-event_map = {fr: (foot, idx) for fr, foot, idx in final_events_frames}
-
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
-    frame_no += 1
-    draw = frame.copy()
-
-    # draw events
-    if frame_no in event_map:
-        foot, idx = event_map[frame_no]
-        if foot == "L":
-            x = int(df.loc[idx, "left_ankle_x"])
-            y = int(df.loc[idx, "left_ankle_y"])
-            color = (0, 255, 0)
-            label = "L CONTACT"
-        else:
-            x = int(df.loc[idx, "right_ankle_x"])
-            y = int(df.loc[idx, "right_ankle_y"])
-            color = (0, 0, 255)
-            label = "R CONTACT"
-
-        cv2.circle(draw, (x, y), 18, color, -1)
-        cv2.putText(draw, label, (50, 80), cv2.FONT_HERSHEY_SIMPLEX, 1.4, color, 3)
-
-    if frame_no == release_frame:
-        cv2.putText(draw, "RELEASE", (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 1.6, (255, 255, 0), 4)
-
-    # slow near events
-    is_event_zone = any(abs(frame_no - ev) <= EVENT_WINDOW for ev in event_frames)
-    repeat = SLOW_FACTOR if is_event_zone else 1
-
-    for _ in range(repeat):
-        out.write(draw)
-
-    if frame_no in event_frames:
-        for _ in range(PAUSE_FRAMES):
-            out.write(draw)
-
-cap.release()
-out.release()
-print(f"\n🎥 Annotated video saved: {ANNOTATED_VIDEO}")
+    cap.release()
+    out.release()
+    print(f"\n ✅ Annotated trimmed video with step labels saved to: {trimmed_output_path}")
+else:
+    print("\n Skipping annotated trimmed video: insufficient step frames detected.")
