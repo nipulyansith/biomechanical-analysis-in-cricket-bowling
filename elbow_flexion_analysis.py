@@ -310,7 +310,7 @@ else:
 
 # Try to find an available video file
 import os
-possible_videos = ["kavisha.mp4"]
+possible_videos = ["data/geenod.MOV"]
 video_path = None
 
 print("Checking for available video files...")

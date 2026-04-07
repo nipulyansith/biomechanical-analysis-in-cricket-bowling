@@ -9,8 +9,8 @@ from scipy.signal import savgol_filter, find_peaks
 # =========================
 # SETTINGS
 # =========================
-VIDEO_PATH = "data/side 1.MOV"
-MODEL_PATH = "yolov8n-pose.pt"
+VIDEO_PATH = "data/geenod.MOV"
+MODEL_PATH = "yolov8l-pose.pt"
 OUTPUT_DIR = "output"
 ANNOTATED_VIDEO = f"{OUTPUT_DIR}/annotated_delivery_stride.mp4"
 
@@ -225,17 +225,26 @@ ret, frame = cap.read()
 cap.release()
 
 # Create a copy so we don't draw over the original data if we need to reset
-display_frame = frame.copy()
+display_scale = 0.5   # 👈 adjust this (0.3 – 0.7 works well)
+
+display_frame = cv2.resize(
+    frame,
+    (int(frame.shape[1] * display_scale), int(frame.shape[0] * display_scale))
+)
 points = []
 
 def click(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
-        points.append((x, y))
-        # Draw a small green dot where the user clicked
+        # Convert back to original coordinates
+        orig_x = int(x / display_scale)
+        orig_y = int(y / display_scale)
+
+        points.append((orig_x, orig_y))
+
+        # Draw on resized frame (for UI only)
         cv2.circle(display_frame, (x, y), 5, (0, 255, 0), -1)
-        # Update the window with the new drawing
         cv2.imshow("Click TOP then BOTTOM of stump", display_frame)
-        
+
         if len(points) == 2:
             print("✅ Two points captured. Press any key to continue.")
 
@@ -267,12 +276,16 @@ print(f"Stride Duration: {duration_s:.3f} s")
 # =========================
 # ANNOTATED VIDEO
 # =========================
+output_scale = 0.5  # 👈 adjust this to change output size (0.5 = half resolution)
+out_width = int(width * output_scale)
+out_height = int(height * output_scale)
+
 cap = cv2.VideoCapture(VIDEO_PATH)
 out = cv2.VideoWriter(
     ANNOTATED_VIDEO,
     cv2.VideoWriter_fourcc(*'mp4v'),
     fps,
-    (width,height)
+    (out_width, out_height)
 )
 
 frame_no = 0
@@ -294,6 +307,7 @@ while True:
     if frame_no == release_frame:
         cv2.putText(frame,"RELEASE",(50,240),0,2,(255,255,0),4)
 
+    frame = cv2.resize(frame, (out_width, out_height))  # ← resize before writing
     out.write(frame)
 
 cap.release()
