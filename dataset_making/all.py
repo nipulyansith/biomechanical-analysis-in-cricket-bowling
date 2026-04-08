@@ -1,14 +1,16 @@
 """
 FAST BOWLING — UNIFIED BIOMECHANICS PIPELINE + DATASET WRITER
 ==============================================================
-Fixes applied vs previous version:
-  1. Wrist velocity always uses the correct bowling arm (stabilize_lr no
-     longer corrupts the bowling-arm columns).
-  2. FFC / BFC / release frames are computed once in main() and passed as a
-     shared `events` dict into every module — no module does its own
-     independent FFC/BFC detection anymore.
-  3. arm_back_frame, elbow_angle_arm_back_deg and elbow_extension_deg are now
-     properly detected and written to the master dataset.
+Additional fixes in this version:
+  4. Step cadence now guaranteed to include the shared FFC frame — after
+     peak detection, the FFC frame is injected into the candidate list so
+     the last-5 picker always sees it.
+  5. Release frame detection upgraded:
+       Primary  : peak wrist speed followed by sharp deceleration
+                  (biomechanically = ball leaves hand → wrist slows)
+       Fallback : wrist-highest (original method)
+       Override : optional ball-detector YOLO model (set BALL_MODEL_PATH)
+     This prevents false releases when the bowler runs in with arm raised.
 """
 
 import os, json, datetime
@@ -24,7 +26,7 @@ import openpyxl
 # =============================================================================
 # ── SETTINGS
 # =============================================================================
-VIDEO_PATH   = r"C:\Users\nipul\OneDrive\Desktop\tm\videos\B-05_T-10.MOV"
+VIDEO_PATH   = r"C:\Users\nipul\OneDrive\Desktop\tm\videos\B-05_T-01.MOV"
 MODEL_PATH   = "yolov8l-pose.pt"
 BASE_OUT_DIR = "output"
 
@@ -37,8 +39,7 @@ SMOOTH_POLY     = 2
 OUTPUT_SCALE    = 0.5
 
 VIEW_MODE            = "SIDE"
-RELEASE_DETECT_MODE  = "WRIST_HIGHEST"
-BALL_MODEL_PATH      = None
+BALL_MODEL_PATH      = None   # set to a ball-detector .pt path to enable Mode B
 BALL_TRACK_FRAMES    = 12
 KNEE_MAX_JUMP_LEGLEN = 0.60
 KNEE_CONF_TH         = 0.25
@@ -320,16 +321,158 @@ def angle_deg(a, b, c):
     return float(np.degrees(np.arccos(np.clip(np.dot(ba, bc) / denom, -1, 1))))
 
 # =============================================================================
-# ── SECTION 4b : SHARED EVENT DETECTION  (computed ONCE in main)
+# ── SECTION 4b : RELEASE FRAME DETECTION  (upgraded — Fix 5)
 # =============================================================================
-def detect_release_frame(df_xy, bowling_wrist):
-    """Bowling wrist highest point (min y) → release."""
-    wy  = df_xy[f"{bowling_wrist}_y"].values.astype(float)
-    wys = smooth(wy)
-    idx = int(np.nanargmin(wys))
-    return idx, int(df_xy.loc[idx, "frame"]), wys
+def detect_release_frame_biomech(df_xy, bowling_wrist, fps, video_path=None):
+    """
+    Upgraded release detection.  Three methods tried in order:
+
+    Method 1 — Wrist speed peak-then-drop  (PRIMARY, most reliable)
+    ─────────────────────────────────────────────────────────────────
+    At ball release the wrist decelerates sharply because the ball mass
+    is no longer being accelerated.  We find the frame where:
+      • wrist speed is at a LOCAL PEAK   (== peak delivery effort)
+      • followed within ~6 frames by a drop of ≥ DROP_RATIO of that peak
+    We search only in the last third of the clip (delivery phase) to
+    avoid run-up peaks.
+
+    Method 2 — Ball detector YOLO  (OVERRIDE if BALL_MODEL_PATH is set)
+    ─────────────────────────────────────────────────────────────────────
+    Run a dedicated ball-detector model around the Method-1 candidate.
+    The release frame = last frame the ball is within WRIST_BALL_DIST_PX
+    pixels of the bowling wrist.
+
+    Method 3 — Wrist highest (min y)  (FALLBACK)
+    ─────────────────────────────────────────────
+    Original method.  Used only if Method 1 produces no convincing
+    candidate.
+
+    Returns: release_idx (0-based), release_frame (1-based), method_used
+    """
+    dt  = 1.0 / fps
+    arm = "right" if bowling_wrist == "right_wrist" else "left"
+
+    # ── compute wrist speed ─────────────────────────────────────────────────
+    wx  = smooth(df_xy[f"{bowling_wrist[:-6]}_wrist_x"
+                       if "_wrist" in bowling_wrist
+                       else f"{arm}_wrist_x"].values.astype(float))
+    wy  = smooth(df_xy[f"{arm}_wrist_y"].values.astype(float))
+
+    # use column names directly
+    wx  = smooth(df_xy[f"{arm}_wrist_x"].values.astype(float))
+    wy  = smooth(df_xy[f"{arm}_wrist_y"].values.astype(float))
+
+    vx  = central_diff(wx, dt)
+    vy  = central_diff(wy, dt)
+    spd = np.sqrt(vx**2 + vy**2)
+    spd_sm = smooth(spd)
+
+    n = len(spd_sm)
+
+    # ── Method 1: peak-then-drop ─────────────────────────────────────────────
+    # Search only in the last 60 % of the clip (delivery phase)
+    search_start = int(n * 0.40)
+    DROP_RATIO   = 0.35   # wrist must drop to ≤ (1-DROP_RATIO)*peak within horizon
+    HORIZON      = max(6, int(0.12 * fps))   # ~120 ms look-ahead
+
+    # Find local speed peaks in the delivery phase
+    delivery_spd = spd_sm[search_start:]
+    peaks, props = find_peaks(delivery_spd,
+                              height=np.nanpercentile(delivery_spd, 60),
+                              distance=max(3, int(0.05 * fps)))
+
+    release_idx_m1 = None
+    if len(peaks) > 0:
+        # Evaluate each peak: is there a sharp drop after it?
+        best_drop = 0.0
+        best_peak = None
+        for pk in peaks:
+            abs_pk   = search_start + pk
+            pk_speed = spd_sm[abs_pk]
+            end_win  = min(n - 1, abs_pk + HORIZON)
+            min_after = np.nanmin(spd_sm[abs_pk:end_win + 1])
+            drop_frac = (pk_speed - min_after) / max(pk_speed, 1e-9)
+            if drop_frac > best_drop:
+                best_drop = drop_frac
+                best_peak = abs_pk
+
+        if best_peak is not None and best_drop >= DROP_RATIO:
+            release_idx_m1 = int(best_peak)
+            print(f"  🎯 Release (Method 1 — speed peak-drop): "
+                  f"frame {int(df_xy.loc[release_idx_m1, 'frame'])}  "
+                  f"(drop={best_drop:.2f})")
+
+    # ── Method 2: ball detector override ─────────────────────────────────────
+    release_idx_m2 = None
+    if BALL_MODEL_PATH is not None and video_path is not None:
+        candidate_idx = release_idx_m1 if release_idx_m1 is not None else int(np.nanargmin(wy))
+        candidate_frame = int(df_xy.loc[candidate_idx, "frame"])
+        # search window: ±1.5 s around candidate
+        win_frames = int(1.5 * fps)
+        scan_start = max(0, candidate_idx - win_frames)
+        scan_end   = min(n - 1, candidate_idx + win_frames)
+        scan_start_frame = int(df_xy.loc[scan_start, "frame"])
+
+        try:
+            ball_model = YOLO(BALL_MODEL_PATH)
+            cap_b      = cv2.VideoCapture(video_path)
+            cap_b.set(cv2.CAP_PROP_POS_FRAMES, scan_start_frame - 1)
+            WRIST_BALL_DIST_PX = 80   # pixels at original resolution
+
+            last_contact_idx = None
+            fi = scan_start
+            while fi <= scan_end:
+                ok_b, frm_b = cap_b.read()
+                if not ok_b:
+                    break
+                res_b = ball_model.predict(frm_b, verbose=False)
+                if res_b and res_b[0].boxes is not None and len(res_b[0].boxes) > 0:
+                    confs_b = res_b[0].boxes.conf.cpu().numpy()
+                    xyxy_b  = res_b[0].boxes.xyxy.cpu().numpy()
+                    j = int(np.argmax(confs_b))
+                    x1_b, y1_b, x2_b, y2_b = xyxy_b[j]
+                    ball_cx = (x1_b + x2_b) / 2
+                    ball_cy = (y1_b + y2_b) / 2
+                    # wrist position at this frame
+                    wrist_x = float(df_xy.loc[fi, f"{arm}_wrist_x"])
+                    wrist_y = float(df_xy.loc[fi, f"{arm}_wrist_y"])
+                    dist = float(np.hypot(ball_cx - wrist_x, ball_cy - wrist_y))
+                    if dist <= WRIST_BALL_DIST_PX:
+                        last_contact_idx = fi
+                fi += 1
+            cap_b.release()
+
+            if last_contact_idx is not None:
+                release_idx_m2 = last_contact_idx
+                print(f"  🎯 Release (Method 2 — ball detector): "
+                      f"frame {int(df_xy.loc[release_idx_m2, 'frame'])}")
+        except Exception as e:
+            print(f"  ⚠️  Ball detector failed ({e}) — skipping Method 2.")
+
+    # ── Method 3: wrist highest (fallback) ───────────────────────────────────
+    release_idx_m3 = int(np.nanargmin(wy))
+    print(f"  🎯 Release (Method 3 — wrist highest fallback): "
+          f"frame {int(df_xy.loc[release_idx_m3, 'frame'])}")
+
+    # ── Choose final release index ────────────────────────────────────────────
+    if release_idx_m2 is not None:
+        final_idx    = release_idx_m2
+        method_used  = "ball_detector"
+    elif release_idx_m1 is not None:
+        final_idx    = release_idx_m1
+        method_used  = "speed_peak_drop"
+    else:
+        final_idx    = release_idx_m3
+        method_used  = "wrist_highest_fallback"
+
+    final_frame = int(df_xy.loc[final_idx, "frame"])
+    print(f"  ✅ Final release: frame {final_frame}  (method={method_used})")
+    return final_idx, final_frame, method_used
 
 
+# =============================================================================
+# ── SECTION 4c : SHARED EVENT DETECTION  (computed ONCE in main)
+# =============================================================================
 def detect_ankle_peaks(df_xy, fps, side, release_idx):
     col  = f"{side}_ankle_y"
     sig  = smooth(df_xy[col].values.astype(float))
@@ -343,7 +486,6 @@ def detect_ankle_peaks(df_xy, fps, side, release_idx):
 
 
 def _find_foot_contact_velocity(df_xy, side, ref_idx, search_before=True):
-    """Velocity-based foot contact refinement (used for BFC/FFC)."""
     col = f"{side}_ankle_y_s"
     if col not in df_xy.columns:
         df_xy[col] = smooth(df_xy[f"{side}_ankle_y"].values.astype(float))
@@ -365,20 +507,16 @@ def _find_foot_contact_velocity(df_xy, side, ref_idx, search_before=True):
     return refined
 
 
-def detect_shared_events(df_xy, fps, bowling_wrist):
+def detect_shared_events(df_xy, fps, bowling_wrist, video_path=None):
     """
     Compute ALL shared event frames ONCE.
-    Returns a dict:
-        release_idx, release_frame
-        ffc_idx,     ffc_frame      (front foot contact)
-        bfc_idx,     bfc_frame      (back foot contact)
-        f_side, b_side              (which ankle is front/back)
-        arm_back_idx, arm_back_frame (bowling arm furthest back before release)
+    Release is now detected via detect_release_frame_biomech (upgraded).
     """
-    # ── Release ──────────────────────────────────────────────────────────────
-    release_idx, release_frame, _ = detect_release_frame(df_xy, bowling_wrist)
+    # ── Release (upgraded) ───────────────────────────────────────────────────
+    release_idx, release_frame, release_method = detect_release_frame_biomech(
+        df_xy, bowling_wrist, fps, video_path=video_path)
 
-    # ── FFC / BFC (velocity-based, same logic as original delivery stride) ──
+    # ── FFC / BFC ────────────────────────────────────────────────────────────
     for side in ("left", "right"):
         df_xy[f"{side}_ankle_y_s"] = smooth(
             df_xy[f"{side}_ankle_y"].values.astype(float))
@@ -393,52 +531,38 @@ def detect_shared_events(df_xy, fps, bowling_wrist):
     bfc_frame = int(df_xy.loc[bfc_idx, "frame"])
 
     # ── Arm-back frame ───────────────────────────────────────────────────────
-    # Definition: the frame BEFORE release where the bowling wrist is at its
-    # lowest vertical position (highest y value in image coords) — i.e. the
-    # arm has swung back and the wrist is at its furthest rearward/downward
-    # position before the forward delivery swing begins.
-    #
-    # Method: in the wrist-y signal, search for the last LOCAL MAXIMUM
-    # (peak in y) that occurs BEFORE the release frame.  That peak corresponds
-    # to the arm hanging farthest back/down before the arm swings upward and
-    # forward toward release.
-    wrist_y_raw = df_xy[f"{bowling_wrist}_y"].values.astype(float)
-    wrist_y_sm  = smooth(wrist_y_raw)
-
-    # Find all local maxima of wrist y (arm down / back positions)
+    arm = "right" if bowling_wrist == "right_wrist" else "left"
+    wrist_y_sm = smooth(df_xy[f"{arm}_wrist_y"].values.astype(float))
     arm_back_peaks, _ = find_peaks(wrist_y_sm, distance=max(5, int(0.1 * fps)))
-
-    # Keep only peaks that are strictly before the release
     arm_back_candidates = arm_back_peaks[arm_back_peaks < release_idx]
 
     if len(arm_back_candidates) > 0:
-        # Take the last one (closest to release = the delivery backswing peak)
         arm_back_idx   = int(arm_back_candidates[-1])
         arm_back_frame = int(df_xy.loc[arm_back_idx, "frame"])
     else:
-        # Fallback: use a point ~0.4 s before release
         fallback_offset = max(1, int(0.4 * fps))
         arm_back_idx    = max(0, release_idx - fallback_offset)
         arm_back_frame  = int(df_xy.loc[arm_back_idx, "frame"])
         print(f"  ⚠️  No arm-back peak found — using fallback frame {arm_back_frame}")
 
-    print(f"\n📍 SHARED EVENTS")
+    print(f"\n📍 SHARED EVENTS  (release method: {release_method})")
     print(f"   BFC     : frame {bfc_frame}  (idx {bfc_idx})")
     print(f"   FFC     : frame {ffc_frame}  (idx {ffc_idx})")
     print(f"   Arm-back: frame {arm_back_frame}  (idx {arm_back_idx})")
     print(f"   Release : frame {release_frame}  (idx {release_idx})")
 
     return {
-        "release_idx":    release_idx,
-        "release_frame":  release_frame,
-        "ffc_idx":        ffc_idx,
-        "ffc_frame":      ffc_frame,
-        "bfc_idx":        bfc_idx,
-        "bfc_frame":      bfc_frame,
-        "f_side":         f_side,
-        "b_side":         b_side,
-        "arm_back_idx":   arm_back_idx,
-        "arm_back_frame": arm_back_frame,
+        "release_idx":      release_idx,
+        "release_frame":    release_frame,
+        "release_method":   release_method,
+        "ffc_idx":          ffc_idx,
+        "ffc_frame":        ffc_frame,
+        "bfc_idx":          bfc_idx,
+        "bfc_frame":        bfc_frame,
+        "f_side":           f_side,
+        "b_side":           b_side,
+        "arm_back_idx":     arm_back_idx,
+        "arm_back_frame":   arm_back_frame,
     }
 
 # =============================================================================
@@ -502,25 +626,30 @@ def draw_skeleton_full(img, kp_xy, scale=1.0, highlight_joints=None):
             cv2.circle(img, (px, py), r, color, -1, cv2.LINE_AA)
 
 # =============================================================================
-# ── SECTION 5 : MODULE 1 — STEP CADENCE
+# ── SECTION 5 : MODULE 1 — STEP CADENCE  (Fix 4: guaranteed FFC inclusion)
 # =============================================================================
 def run_step_cadence(df_xy, fps, events, video_path, width, height):
     """
-    events dict is used for release_frame only.
-    Step cadence detects its own last-5-steps from ankle signals
-    (this is intentional — step detection is independent of BFC/FFC).
+    Fix 4: After standard peak detection, the shared ffc_frame is injected
+    into the step-event list (if not already present) so that pick_alternating_last5
+    always sees the delivery FFC.  The injection uses the correct foot label
+    derived from events['f_side'].
     """
     print("\n" + "─"*60)
     print("MODULE 1 — STEP CADENCE")
     print("─"*60)
 
     release_frame = events["release_frame"]
+    ffc_frame     = events["ffc_frame"]
+    ffc_foot      = events["f_side"]   # "left" or "right" — front foot side
 
     min_dist = max(6, int(0.20 * fps))
     r_sig    = smooth(df_xy["right_ankle_y"].values.astype(float))
     l_sig    = smooth(df_xy["left_ankle_y"].values.astype(float))
-    r_peaks, _ = find_peaks(r_sig, distance=min_dist, prominence=30)
-    l_peaks, _ = find_peaks(l_sig, distance=min_dist, prominence=30)
+
+    # Lower the prominence slightly so nearby contacts are not filtered out
+    r_peaks, _ = find_peaks(r_sig, distance=min_dist, prominence=20)
+    l_peaks, _ = find_peaks(l_sig, distance=min_dist, prominence=20)
 
     ankle_frames = df_xy["frame"].values
     step_events  = (
@@ -529,6 +658,16 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
     )
     step_events.sort(key=lambda x: x[0])
     step_events = [s for s in step_events if s[0] <= release_frame]
+
+    # ── FIX 4: inject FFC if missing ────────────────────────────────────────
+    # Check if ffc_frame is already covered (within ±3 frames of any detected step)
+    MERGE_TOLERANCE = 3
+    ffc_covered = any(abs(s[0] - ffc_frame) <= MERGE_TOLERANCE for s in step_events)
+
+    if not ffc_covered:
+        step_events.append((ffc_frame, ffc_foot))
+        step_events.sort(key=lambda x: x[0])
+        print(f"  ℹ️  FFC frame {ffc_frame} not detected by peak finder — injected as {ffc_foot} foot.")
 
     print("\n📋 Foot-contact events before release:")
     for s in step_events:
@@ -654,10 +793,6 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
 # ── SECTION 6 : MODULE 2 — DELIVERY STRIDE
 # =============================================================================
 def run_delivery_stride(df_xy, fps, events, meters_per_pixel, video_path, width, height):
-    """
-    Uses pre-computed BFC/FFC from shared events dict.
-    No independent foot-contact detection here anymore.
-    """
     print("\n" + "─"*60)
     print("MODULE 2 — DELIVERY STRIDE")
     print("─"*60)
@@ -736,12 +871,12 @@ def run_delivery_stride(df_xy, fps, events, meters_per_pixel, video_path, width,
     print(f"✅ Delivery stride video: {out_vid}")
 
     return {
-        "bfc_frame":      bfc_frame,
-        "ffc_frame":      ffc_frame,
-        "stride_m":       stride_m,
+        "bfc_frame":         bfc_frame,
+        "ffc_frame":         ffc_frame,
+        "stride_m":          stride_m,
         "stride_duration_s": duration_s,
-        "f_side":         f_side,
-        "b_side":         b_side,
+        "f_side":            f_side,
+        "b_side":            b_side,
     }
 
 # =============================================================================
@@ -793,7 +928,6 @@ def run_elbow_flexion(df_xy, fps, events, bowling_wrist, video_path, width, heig
     frame_to_angle = {int(r["frame"]): float(r["elbow_angle"])
                       for _, r in df_elbow.iterrows()}
 
-    # Elbow angles at key events
     elbow_at_release  = frame_to_angle.get(release_frame,  np.nan)
     elbow_at_arm_back = frame_to_angle.get(arm_back_frame, np.nan)
     if np.isfinite(elbow_at_release) and np.isfinite(elbow_at_arm_back):
@@ -801,12 +935,14 @@ def run_elbow_flexion(df_xy, fps, events, bowling_wrist, video_path, width, heig
     else:
         elbow_extension = np.nan
 
-    print(f"  Elbow @ arm-back (frame {arm_back_frame}): "
-          f"{elbow_at_arm_back:.1f}°" if np.isfinite(elbow_at_arm_back) else
-          f"  Elbow @ arm-back: N/A")
-    print(f"  Elbow @ release  (frame {release_frame}): "
-          f"{elbow_at_release:.1f}°"  if np.isfinite(elbow_at_release)  else
-          f"  Elbow @ release: N/A")
+    if np.isfinite(elbow_at_arm_back):
+        print(f"  Elbow @ arm-back (frame {arm_back_frame}): {elbow_at_arm_back:.1f}°")
+    else:
+        print(f"  Elbow @ arm-back: N/A")
+    if np.isfinite(elbow_at_release):
+        print(f"  Elbow @ release  (frame {release_frame}): {elbow_at_release:.1f}°")
+    else:
+        print(f"  Elbow @ release: N/A")
     if np.isfinite(elbow_extension):
         print(f"  Elbow extension: {elbow_extension:.1f}°")
 
@@ -832,7 +968,6 @@ def run_elbow_flexion(df_xy, fps, events, bowling_wrist, video_path, width, heig
     axes[1].set_title(f"{arm_label} ARM — Elbow Angular Velocity (Full Clip)")
     axes[1].grid(True, alpha=0.3)
     plt.tight_layout(); plt.savefig(png_path, dpi=200); plt.close()
-
     print(f"📊 Elbow CSV:  {csv_path}")
     print(f"📈 Elbow plot: {png_path}")
 
@@ -878,24 +1013,18 @@ def run_elbow_flexion(df_xy, fps, events, bowling_wrist, video_path, width, heig
             cv2.putText(ann, "W", (wr_d[0]+int(8*s), wr_d[1]-int(8*s)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5*s/0.5, (255,255,255), 1, cv2.LINE_AA)
             if np.isfinite(ang):
-                draw_angle_arc(ann, el_d, sh_d, wr_d, ang,
-                               color=col, radius=int(45*s))
+                draw_angle_arc(ann, el_d, sh_d, wr_d, ang, color=col, radius=int(45*s))
         if np.isfinite(ang):
             gauge_x  = ow - int(40*s)
-            gauge_y0 = int(80*s); gauge_y1 = oh - int(80*s)
-            gauge_h  = gauge_y1 - gauge_y0
-            cv2.rectangle(ann, (gauge_x,gauge_y0),
-                          (gauge_x+int(18*s),gauge_y1), (50,50,50), -1)
+            gauge_y0 = int(80*s); gauge_y1 = oh - int(80*s); gauge_h = gauge_y1 - gauge_y0
+            cv2.rectangle(ann, (gauge_x,gauge_y0), (gauge_x+int(18*s),gauge_y1), (50,50,50), -1)
             fill = int(gauge_h * max(0, min(1, ang/180.0)))
-            cv2.rectangle(ann, (gauge_x,gauge_y1-fill),
-                          (gauge_x+int(18*s),gauge_y1), elbow_color(ang), -1)
-            cv2.rectangle(ann, (gauge_x,gauge_y0),
-                          (gauge_x+int(18*s),gauge_y1), (200,200,200), 1)
+            cv2.rectangle(ann, (gauge_x,gauge_y1-fill), (gauge_x+int(18*s),gauge_y1), elbow_color(ang), -1)
+            cv2.rectangle(ann, (gauge_x,gauge_y0), (gauge_x+int(18*s),gauge_y1), (200,200,200), 1)
             cv2.putText(ann, "180", (gauge_x-int(38*s),gauge_y0+int(8*s)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45*s/0.5, (200,200,200), 1)
             cv2.putText(ann, "0", (gauge_x-int(18*s),gauge_y1),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45*s/0.5, (200,200,200), 1)
-
         event = (">>> ARM-BACK <<<" if frame_no == arm_back_frame else
                  ">>> BALL RELEASE <<<" if frame_no == release_frame else "")
         info  = [f"MODULE: {arm_label} ARM ELBOW FLEXION",
@@ -905,8 +1034,7 @@ def run_elbow_flexion(df_xy, fps, events, bowling_wrist, video_path, width, heig
         if np.isfinite(elbow_extension):
             info.append(f"Extension: {elbow_extension:.1f} deg")
         if event: info.insert(1, event)
-        draw_info_box(ann, info, x=10, y=10,
-                      font_scale=0.55 * OUTPUT_SCALE / 0.5)
+        draw_info_box(ann, info, x=10, y=10, font_scale=0.55 * OUTPUT_SCALE / 0.5)
         vw.write(ann)
 
     cap.release(); vw.release()
@@ -914,13 +1042,13 @@ def run_elbow_flexion(df_xy, fps, events, bowling_wrist, video_path, width, heig
     print(f"✅ Elbow flexion video: {out_vid}")
 
     return {
-        "df_elbow":           df_elbow,
-        "release_frame":      release_frame,
-        "arm":                arm,
-        "frame_to_angle":     frame_to_angle,
-        "elbow_at_release":   elbow_at_release,
-        "elbow_at_arm_back":  elbow_at_arm_back,
-        "elbow_extension":    elbow_extension,
+        "df_elbow":          df_elbow,
+        "release_frame":     release_frame,
+        "arm":               arm,
+        "frame_to_angle":    frame_to_angle,
+        "elbow_at_release":  elbow_at_release,
+        "elbow_at_arm_back": elbow_at_arm_back,
+        "elbow_extension":   elbow_extension,
     }
 
 # =============================================================================
@@ -951,17 +1079,12 @@ class KneeLockTracker:
 
 
 def run_knee_flexion(df_xy, df_conf, fps, events, knee_side, video_path, width, height):
-    """
-    Uses shared ffc_frame and release_frame from events dict.
-    The internal FFC/release detection (wrist-speed heuristic) is kept as a
-    cross-check but the SHARED events are used for all outputs and datasets.
-    """
     print("\n" + "─"*60)
     print("MODULE 4 — KNEE FLEXION")
     print("─"*60)
 
-    release_frame  = events["release_frame"]
-    ffc_frame      = events["ffc_frame"]
+    release_frame = events["release_frame"]
+    ffc_frame     = events["ffc_frame"]
 
     side_label = "LEFT (front)" if knee_side == "L" else "RIGHT (front)"
     kside      = "left"         if knee_side == "L" else "right"
@@ -997,13 +1120,11 @@ def run_knee_flexion(df_xy, df_conf, fps, events, knee_side, video_path, width, 
     frame_to_knee_angle = {int(r["frame"]): float(r["knee_angle_deg"])
                            for _, r in df_knee.iterrows()}
 
-    # Use shared event frames for is_ffc / is_release flags
     df_knee["is_ffc"]     = df_knee["frame"] == ffc_frame
     df_knee["is_release"] = df_knee["frame"] == release_frame
 
     csv_path = out_path("knee_angles.csv"); df_knee.to_csv(csv_path, index=False)
 
-    # Segment CSV from FFC → release using shared frames
     ffc_df_idx = df_knee[df_knee["frame"] == ffc_frame].index
     rel_df_idx = df_knee[df_knee["frame"] == release_frame].index
     if len(ffc_df_idx) > 0 and len(rel_df_idx) > 0:
@@ -1012,7 +1133,6 @@ def run_knee_flexion(df_xy, df_conf, fps, events, knee_side, video_path, width, 
             df_knee.loc[f0:f1, ["frame","time_s","knee_angle_deg"]].to_csv(
                 out_path("knee_angles_ffc_to_release.csv"), index=False)
 
-    # ffc_t / release_t for plot vertical lines
     ffc_t_row = df_knee[df_knee["frame"] == ffc_frame]
     rel_t_row = df_knee[df_knee["frame"] == release_frame]
     ffc_t_val = float(ffc_t_row["time_s"].values[0]) if len(ffc_t_row) > 0 else None
@@ -1023,17 +1143,18 @@ def run_knee_flexion(df_xy, df_conf, fps, events, knee_side, video_path, width, 
     plt.plot(df_knee["time_s"], df_knee["knee_angle_deg"],
              linewidth=1.5, color="limegreen")
     if ffc_t_val is not None:
-        plt.axvline(ffc_t_val, linestyle="--", color="blue",
-                    label=f"FFC (f{ffc_frame})")
+        plt.axvline(ffc_t_val, linestyle="--", color="blue", label=f"FFC (f{ffc_frame})")
     if rel_t_val is not None:
-        plt.axvline(rel_t_val, linestyle=":", color="red",
-                    label=f"Release (f{release_frame})")
+        plt.axvline(rel_t_val, linestyle=":", color="red", label=f"Release (f{release_frame})")
     plt.xlabel("Time (s)"); plt.ylabel("Knee Angle (deg)")
     plt.title(f"{side_label} Knee Flexion — Full Clip")
     plt.legend(); plt.grid(True, alpha=0.3); plt.tight_layout()
     plt.savefig(png_path, dpi=200); plt.close()
     print(f"📊 Knee CSV:  {csv_path}")
     print(f"📈 Knee plot: {png_path}")
+
+    frame_to_knee_angle = {int(r["frame"]): float(r["knee_angle_deg"])
+                           for _, r in df_knee.iterrows()}
 
     out_vid    = out_path("knee_flexion_annotated.mp4")
     vw, ow, oh = sized_writer(out_vid, fps, width, height)
@@ -1065,8 +1186,7 @@ def run_knee_flexion(df_xy, df_conf, fps, events, knee_side, video_path, width, 
             H3, K3, A3, _ = last_good2
             col = knee_color(ang_vid) if np.isfinite(ang_vid) else (200,200,200)
             H_d=(int(H3[0]*s),int(H3[1]*s)); K_d=(int(K3[0]*s),int(K3[1]*s)); A_d=(int(A3[0]*s),int(A3[1]*s))
-            cv2.line(ann, H_d, K_d, col, max(3,int(5*s)), cv2.LINE_AA)
-            cv2.line(ann, K_d, A_d, col, max(3,int(5*s)), cv2.LINE_AA)
+            cv2.line(ann,H_d,K_d,col,max(3,int(5*s)),cv2.LINE_AA); cv2.line(ann,K_d,A_d,col,max(3,int(5*s)),cv2.LINE_AA)
             cv2.circle(ann,H_d,int(9*s),(255,255,255),-1,cv2.LINE_AA); cv2.circle(ann,H_d,int(7*s),(200,0,255),-1,cv2.LINE_AA)
             cv2.circle(ann,K_d,int(11*s),(255,255,255),-1,cv2.LINE_AA); cv2.circle(ann,K_d,int(9*s),col,-1,cv2.LINE_AA)
             cv2.circle(ann,A_d,int(9*s),(255,255,255),-1,cv2.LINE_AA); cv2.circle(ann,A_d,int(7*s),(100,255,0),-1,cv2.LINE_AA)
@@ -1074,7 +1194,7 @@ def run_knee_flexion(df_xy, df_conf, fps, events, knee_side, video_path, width, 
             cv2.putText(ann,"KNEE",(K_d[0]+int(8*s),K_d[1]-int(8*s)),cv2.FONT_HERSHEY_SIMPLEX,0.45*s/0.5,(255,255,255),1,cv2.LINE_AA)
             cv2.putText(ann,"ANKLE",(A_d[0]+int(8*s),A_d[1]-int(8*s)),cv2.FONT_HERSHEY_SIMPLEX,0.45*s/0.5,(255,255,255),1,cv2.LINE_AA)
             if np.isfinite(ang_vid):
-                draw_angle_arc(ann, K_d, H_d, A_d, ang_vid, color=col, radius=int(50*s))
+                draw_angle_arc(ann,K_d,H_d,A_d,ang_vid,color=col,radius=int(50*s))
         if np.isfinite(ang_vid):
             gauge_x=ow-int(40*s); gauge_y0=int(80*s); gauge_y1=oh-int(80*s); gauge_h=gauge_y1-gauge_y0
             col_g=knee_color(ang_vid)
@@ -1084,15 +1204,15 @@ def run_knee_flexion(df_xy, df_conf, fps, events, knee_side, video_path, width, 
             cv2.rectangle(ann,(gauge_x,gauge_y0),(gauge_x+int(18*s),gauge_y1),(200,200,200),1)
             cv2.putText(ann,"180",(gauge_x-int(38*s),gauge_y0+int(8*s)),cv2.FONT_HERSHEY_SIMPLEX,0.4*s/0.5,(200,200,200),1)
             cv2.putText(ann,"0",(gauge_x-int(18*s),gauge_y1),cv2.FONT_HERSHEY_SIMPLEX,0.4*s/0.5,(200,200,200),1)
-        is_ffc  = frame_no == ffc_frame
-        is_rel  = frame_no == release_frame
+        is_ffc = frame_no == ffc_frame
+        is_rel = frame_no == release_frame
         info = [f"MODULE: {side_label.upper()} KNEE FLEXION",
                 f"Frame: {frame_no}   Time: {frame_no/fps:.2f}s",
                 f"Knee angle: {ang_vid:.1f} deg" if np.isfinite(ang_vid) else "Knee angle: --",
                 "(180=straight  <180=flexed)"]
         if is_ffc: info.insert(1, ">>> FRONT FOOT CONTACT (FFC) <<<")
         if is_rel: info.insert(1, ">>> BALL RELEASE <<<")
-        draw_info_box(ann, info, x=10, y=10, font_scale=0.55*OUTPUT_SCALE/0.5)
+        draw_info_box(ann,info,x=10,y=10,font_scale=0.55*OUTPUT_SCALE/0.5)
         repeats = 1
         if is_ffc or is_rel: repeats = int(fps*1.5)
         for _ in range(repeats): vw.write(ann)
@@ -1105,9 +1225,8 @@ def run_knee_flexion(df_xy, df_conf, fps, events, knee_side, video_path, width, 
         "df_knee":             df_knee,
         "frame_to_knee_angle": frame_to_knee_angle,
         "kside":               kside,
-        # expose angles at the shared event frames for master dataset
-        "knee_angle_at_ffc":      frame_to_knee_angle.get(ffc_frame, np.nan),
-        "knee_angle_at_release":  frame_to_knee_angle.get(release_frame, np.nan),
+        "knee_angle_at_ffc":     frame_to_knee_angle.get(ffc_frame,     np.nan),
+        "knee_angle_at_release": frame_to_knee_angle.get(release_frame, np.nan),
     }
 
 # =============================================================================
@@ -1124,10 +1243,6 @@ def safe_head_xy(df_xy, idx):
 
 def run_head_position(df_xy, fps, events, bowling_wrist,
                       cm_per_pixel, pixels_per_meter, video_path, width, height):
-    """
-    Uses shared FFC/BFC/release frames from events dict.
-    Front-ankle determination still uses the foot-side from shared events.
-    """
     print("\n" + "─"*60)
     print("MODULE 5 — HEAD / COM POSITION")
     print("─"*60)
@@ -1138,10 +1253,9 @@ def run_head_position(df_xy, fps, events, bowling_wrist,
     ffc_idx       = events["ffc_idx"]
     bfc_frame     = events["bfc_frame"]
     bfc_idx       = events["bfc_idx"]
-    f_side        = events["f_side"]   # "left" or "right"
+    f_side        = events["f_side"]
 
     front_ankle = f"{f_side}_ankle"
-    back_ankle  = ("right_ankle" if f_side == "left" else "left_ankle")
 
     head_x = [safe_head_xy(df_xy,i)[0] for i in range(len(df_xy))]
     head_y = [safe_head_xy(df_xy,i)[1] for i in range(len(df_xy))]
@@ -1149,7 +1263,6 @@ def run_head_position(df_xy, fps, events, bowling_wrist,
     df_xy["hip_mid_x"] = (df_xy["left_hip_x"].values + df_xy["right_hip_x"].values)/2
     df_xy["hip_mid_y"] = (df_xy["left_hip_y"].values + df_xy["right_hip_y"].values)/2
 
-    # Smoothed ankle signals (used downstream in frame dataset)
     for side in ("left", "right"):
         _, sig = detect_ankle_peaks(df_xy, fps, side, release_idx)
         df_xy[f"{side}_ankle_y_sm"] = sig
@@ -1201,12 +1314,11 @@ def run_head_position(df_xy, fps, events, bowling_wrist,
 
     out_vid    = out_path("head_position_annotated.mp4")
     vw, ow, oh = sized_writer(out_vid, fps, width, height)
-    start_f    = bfc_frame
     cap        = cv2.VideoCapture(video_path)
-    cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, start_f-1))
+    cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, bfc_frame-1))
 
     print(f"\n🎬 Writing head position video…")
-    frame_no = start_f
+    frame_no = bfc_frame
     while frame_no <= release_frame:
         ret, frame = cap.read()
         if not ret: break
@@ -1241,7 +1353,7 @@ def run_head_position(df_xy, fps, events, bowling_wrist,
               f"Head Dy: {dy_cm2:.1f} cm" if np.isfinite(dy_cm2) else "Head Dy: --",
               "Green=Head  Red=Front foot"]
         if event_label: info.insert(1, f">>> {event_label} <<<")
-        draw_info_box(ann, info, x=10, y=10, font_scale=0.55*OUTPUT_SCALE/0.5)
+        draw_info_box(ann,info,x=10,y=10,font_scale=0.55*OUTPUT_SCALE/0.5)
         repeats=6
         if frame_no in [bfc_frame, ffc_frame, release_frame]:
             repeats += int(fps*2.0)
@@ -1253,59 +1365,39 @@ def run_head_position(df_xy, fps, events, bowling_wrist,
     print(f"✅ Head position video: {out_vid}")
 
     return {
-        "ffc_frame":    ffc_frame,
-        "bfc_frame":    bfc_frame,
-        "ffc_idx":      ffc_idx,
-        "front_ankle":  front_ankle,
-        "ffc_offset":   ffc_off,
-        "bfc_offset":   bfc_off,
+        "ffc_frame":   ffc_frame,
+        "bfc_frame":   bfc_frame,
+        "ffc_idx":     ffc_idx,
+        "front_ankle": front_ankle,
+        "ffc_offset":  ffc_off,
+        "bfc_offset":  bfc_off,
     }
 
 # =============================================================================
 # ── SECTION 10 : MODULE 6 — WRIST VELOCITY
-# ── FIX 1: stabilize_lr is NOT applied to the bowling arm columns.
-# ──        The original df_xy bowling-arm data is used directly.
 # =============================================================================
 def stabilize_lr_non_bowling(df: pd.DataFrame, bowling_arm: str) -> pd.DataFrame:
-    """
-    Apply the left/right stabilisation swap ONLY to non-bowling-arm pairs.
-    The bowling arm columns (shoulder/elbow/wrist) are intentionally excluded
-    so that label-flipping never contaminates the bowling arm signal.
-    """
-    # Pairs to stabilise — exclude bowling arm joints
-    other_arm = "right" if bowling_arm == "left" else "left"
     all_pairs = [
-        ("left_wrist",    "right_wrist"),
-        ("left_elbow",    "right_elbow"),
-        ("left_shoulder", "right_shoulder"),
-        ("left_hip",      "right_hip"),
-        ("left_knee",     "right_knee"),
-        ("left_ankle",    "right_ankle"),
+        ("left_wrist","right_wrist"), ("left_elbow","right_elbow"),
+        ("left_shoulder","right_shoulder"), ("left_hip","right_hip"),
+        ("left_knee","right_knee"), ("left_ankle","right_ankle"),
     ]
-    # Keep only pairs where NEITHER side is the bowling arm's wrist/elbow/shoulder
-    bowling_joints = {f"{bowling_arm}_wrist",
-                      f"{bowling_arm}_elbow",
-                      f"{bowling_arm}_shoulder"}
+    bowling_joints = {f"{bowling_arm}_wrist", f"{bowling_arm}_elbow", f"{bowling_arm}_shoulder"}
     pairs = [(L, R) for L, R in all_pairs
              if L not in bowling_joints and R not in bowling_joints
              and f"{L}_x" in df.columns and f"{R}_x" in df.columns]
-
     if not pairs or len(df) < 2:
         return df
 
     def cost(prev, cur, swapped):
         total = 0.0
         for L, R in pairs:
-            Lc = np.array([cur[f"{R if swapped else L}_x"],
-                           cur[f"{R if swapped else L}_y"]], float)
-            Rc = np.array([cur[f"{L if swapped else R}_x"],
-                           cur[f"{L if swapped else R}_y"]], float)
+            Lc = np.array([cur[f"{R if swapped else L}_x"], cur[f"{R if swapped else L}_y"]], float)
+            Rc = np.array([cur[f"{L if swapped else R}_x"], cur[f"{L if swapped else R}_y"]], float)
             Lp = np.array([prev[f"{L}_x"], prev[f"{L}_y"]], float)
             Rp = np.array([prev[f"{R}_x"], prev[f"{R}_y"]], float)
-            if np.all(np.isfinite(Lc)) and np.all(np.isfinite(Lp)):
-                total += float(np.linalg.norm(Lc-Lp))
-            if np.all(np.isfinite(Rc)) and np.all(np.isfinite(Rp)):
-                total += float(np.linalg.norm(Rc-Rp))
+            if np.all(np.isfinite(Lc)) and np.all(np.isfinite(Lp)): total += float(np.linalg.norm(Lc-Lp))
+            if np.all(np.isfinite(Rc)) and np.all(np.isfinite(Rp)): total += float(np.linalg.norm(Rc-Rp))
         return total
 
     def swap_row(row):
@@ -1317,8 +1409,7 @@ def stabilize_lr_non_bowling(df: pd.DataFrame, bowling_arm: str) -> pd.DataFrame
 
     rows = df.to_dict("records"); out = [rows[0]]
     for i in range(1, len(rows)):
-        ck = cost(out[-1], rows[i], False)
-        cs = cost(out[-1], rows[i], True)
+        ck = cost(out[-1], rows[i], False); cs = cost(out[-1], rows[i], True)
         out.append(swap_row(rows[i]) if cs < ck else rows[i])
     return pd.DataFrame(out)
 
@@ -1330,8 +1421,8 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
     print("─"*60)
 
     release_frame = events["release_frame"]
+    release_idx   = events["release_idx"]
 
-    # ── FIX 1: arm is always derived from bowling_wrist ─────────────────────
     arm        = "right" if bowling_wrist == "right_wrist" else "left"
     elbow_name = f"{arm}_elbow"
     wrist_name = f"{arm}_wrist"
@@ -1339,16 +1430,15 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
 
     print(f"  Bowling arm  : {arm.upper()}")
     print(f"  Wrist column : {wrist_name}")
-    print(f"  Elbow column : {elbow_name}")
 
-    # Apply stabilisation only to non-bowling-arm pairs
-    df_stab = stabilize_lr_non_bowling(df_xy.copy(), bowling_arm=arm)
+    # Stabilise only non-bowling-arm joints
+    stabilize_lr_non_bowling(df_xy.copy(), bowling_arm=arm)
 
-    # Read bowling-arm columns directly from the ORIGINAL df_xy (never swapped)
-    wx = smooth(df_xy[f"{wrist_name}_x"].values.astype(float))
-    wy = smooth(df_xy[f"{wrist_name}_y"].values.astype(float))
-    ex = smooth(df_xy[f"{elbow_name}_x"].values.astype(float))
-    ey = smooth(df_xy[f"{elbow_name}_y"].values.astype(float))
+    # Always read bowling arm from original df_xy
+    wx = smooth(df_xy[f"{arm}_wrist_x"].values.astype(float))
+    wy = smooth(df_xy[f"{arm}_wrist_y"].values.astype(float))
+    ex = smooth(df_xy[f"{arm}_elbow_x"].values.astype(float))
+    ey = smooth(df_xy[f"{arm}_elbow_y"].values.astype(float))
 
     df_xy["wrist_x_sm"] = wx; df_xy["wrist_y_sm"] = wy
     df_xy["elbow_x_sm"] = ex; df_xy["elbow_y_sm"] = ey
@@ -1371,9 +1461,7 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
     df_xy["forearm_angle_rad"]         = theta_u
     df_xy["wrist_angular_vel_rads_sm"] = omega_sm
 
-    # Release index for this module (use shared release_frame)
-    release_idx = events["release_idx"]
-    rel_frame2  = release_frame   # consistent with shared events
+    rel_frame2 = release_frame
 
     pk_idx   = int(np.nanargmax(spd_sm))
     pk_frame = int(df_xy.loc[pk_idx, "frame"])
@@ -1422,8 +1510,7 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
             bx_s=smooth(pts_b[:,0]); by_s=smooth(pts_b[:,1])
             bvx=central_diff(bx_s,dt)*meters_per_pixel
             bvy=central_diff(by_s,dt)*meters_per_pixel
-            bspd=np.sqrt(bvx**2+bvy**2)
-            bspd_v=bspd[np.isfinite(bspd)]
+            bspd=np.sqrt(bvx**2+bvy**2); bspd_v=bspd[np.isfinite(bspd)]
             if len(bspd_v):
                 ball_mode_b={"avg_kmh":float(np.nanmean(bspd_v)*3.6),
                              "peak_kmh":float(np.nanmax(bspd_v)*3.6)}
@@ -1434,15 +1521,14 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
     df_xy[ts_cols].to_csv(out_path("wrist_timeseries.csv"), index=False)
 
     metrics_w = {
-        "bowling_arm": arm.upper(),
-        "release_frame": rel_frame2,
+        "bowling_arm": arm.upper(), "release_frame": rel_frame2,
+        "release_method": events.get("release_method", "unknown"),
         "wrist_speed_at_release_mps": spd_at_rel,
         "wrist_speed_at_release_kmh": spd_at_rel_k,
         "peak_wrist_speed_overall_mps": pk_speed,
         "peak_wrist_speed_near_release_mps": near_speed,
         "peak_angular_vel_near_release_rads": near_om_peak,
-        "ball_speed_proxy": ball_proxy,
-        "ball_speed_mode_b": ball_mode_b,
+        "ball_speed_proxy": ball_proxy, "ball_speed_mode_b": ball_mode_b,
     }
     with open(out_path("wrist_ball_metrics.json"), "w") as f:
         json.dump(metrics_w, f, indent=2)
@@ -1467,9 +1553,6 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
     plt.legend(); plt.grid(True, alpha=0.3); plt.tight_layout()
     plt.savefig(out_path("wrist_omega_vs_time.png"), dpi=200); plt.close()
 
-    print(f"📊 Wrist CSV:  {out_path('wrist_timeseries.csv')}")
-    print(f"📌 Metrics:    {out_path('wrist_ball_metrics.json')}")
-
     out_vid       = out_path("wrist_velocity_annotated.mp4")
     vw, ow, oh    = sized_writer(out_vid, fps, width, height)
     cap           = cv2.VideoCapture(video_path)
@@ -1492,14 +1575,10 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
         t_spd=min(1.0,spd_k/max_speed_kmh)
         arm_col=(0,int(255*(1-t_spd)),int(255*t_spd))
         cv2.line(ann,E_d,W_d,arm_col,max(3,int(5*s)),cv2.LINE_AA)
-        cv2.circle(ann,E_d,int(9*s),(255,255,255),-1,cv2.LINE_AA)
-        cv2.circle(ann,E_d,int(7*s),(255,100,0),-1,cv2.LINE_AA)
-        cv2.circle(ann,W_d,int(9*s),(255,255,255),-1,cv2.LINE_AA)
-        cv2.circle(ann,W_d,int(7*s),arm_col,-1,cv2.LINE_AA)
-        cv2.putText(ann,"ELBOW",(E_d[0]+int(8*s),E_d[1]-int(8*s)),
-                    cv2.FONT_HERSHEY_SIMPLEX,0.45*s/0.5,(255,255,255),1,cv2.LINE_AA)
-        cv2.putText(ann,"WRIST",(W_d[0]+int(8*s),W_d[1]-int(8*s)),
-                    cv2.FONT_HERSHEY_SIMPLEX,0.45*s/0.5,(255,255,255),1,cv2.LINE_AA)
+        cv2.circle(ann,E_d,int(9*s),(255,255,255),-1,cv2.LINE_AA); cv2.circle(ann,E_d,int(7*s),(255,100,0),-1,cv2.LINE_AA)
+        cv2.circle(ann,W_d,int(9*s),(255,255,255),-1,cv2.LINE_AA); cv2.circle(ann,W_d,int(7*s),arm_col,-1,cv2.LINE_AA)
+        cv2.putText(ann,"ELBOW",(E_d[0]+int(8*s),E_d[1]-int(8*s)),cv2.FONT_HERSHEY_SIMPLEX,0.45*s/0.5,(255,255,255),1,cv2.LINE_AA)
+        cv2.putText(ann,"WRIST",(W_d[0]+int(8*s),W_d[1]-int(8*s)),cv2.FONT_HERSHEY_SIMPLEX,0.45*s/0.5,(255,255,255),1,cv2.LINE_AA)
         arrow_scale=0.08
         end_x=int(wxi*s+vxi/meters_per_pixel*arrow_scale*s)
         end_y=int(wyi*s+vyi/meters_per_pixel*arrow_scale*s)
@@ -1509,19 +1588,16 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
         fill_g=int(gauge_h*t_spd)
         cv2.rectangle(ann,(gauge_x,gauge_y1-fill_g),(gauge_x+int(18*s),gauge_y1),arm_col,-1)
         cv2.rectangle(ann,(gauge_x,gauge_y0),(gauge_x+int(18*s),gauge_y1),(200,200,200),1)
-        cv2.putText(ann,f"{max_speed_kmh:.0f}",(gauge_x-int(35*s),gauge_y0+int(8*s)),
-                    cv2.FONT_HERSHEY_SIMPLEX,0.4*s/0.5,(200,200,200),1)
-        cv2.putText(ann,"0",(gauge_x-int(15*s),gauge_y1),
-                    cv2.FONT_HERSHEY_SIMPLEX,0.4*s/0.5,(200,200,200),1)
-        cv2.putText(ann,"km/h",(gauge_x-int(5*s),gauge_y1+int(18*s)),
-                    cv2.FONT_HERSHEY_SIMPLEX,0.4*s/0.5,(200,200,200),1)
+        cv2.putText(ann,f"{max_speed_kmh:.0f}",(gauge_x-int(35*s),gauge_y0+int(8*s)),cv2.FONT_HERSHEY_SIMPLEX,0.4*s/0.5,(200,200,200),1)
+        cv2.putText(ann,"0",(gauge_x-int(15*s),gauge_y1),cv2.FONT_HERSHEY_SIMPLEX,0.4*s/0.5,(200,200,200),1)
+        cv2.putText(ann,"km/h",(gauge_x-int(5*s),gauge_y1+int(18*s)),cv2.FONT_HERSHEY_SIMPLEX,0.4*s/0.5,(200,200,200),1)
         event=(">>> BALL RELEASE <<<"     if frame_no==rel_frame2 else
                ">>> PEAK WRIST SPEED <<<" if frame_no==near_frame  else "")
         info=[f"MODULE: {arm.upper()} WRIST VELOCITY",
               f"Frame: {frame_no}   Time: {frame_no/fps:.2f}s",
               f"Wrist speed: {spd_i:.2f} m/s  ({spd_k:.1f} km/h)",
               f"Angular vel: {omega_i:.2f} rad/s",
-              f"Ball speed proxy: {spd_at_rel_k:.1f} km/h"]
+              f"Ball proxy: {spd_at_rel_k:.1f} km/h"]
         if event: info.insert(1, event)
         draw_info_box(ann,info,x=10,y=10,font_scale=0.55*OUTPUT_SCALE/0.5)
         for _ in range(slow_mo): vw.write(ann)
@@ -1531,13 +1607,13 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
     print(f"✅ Wrist velocity video: {out_vid}")
 
     return {
-        "release_frame":              rel_frame2,
-        "speed_at_release_mps":       spd_at_rel,
-        "peak_speed_near_release_mps":near_speed,
-        "peak_speed_overall_mps":     pk_speed,
-        "peak_angular_vel_rads":      near_om_peak,
-        "ball_proxy_kmh":             spd_at_rel_k,
-        "arm":                        arm,
+        "release_frame":               rel_frame2,
+        "speed_at_release_mps":        spd_at_rel,
+        "peak_speed_near_release_mps": near_speed,
+        "peak_speed_overall_mps":      pk_speed,
+        "peak_angular_vel_rads":       near_om_peak,
+        "ball_proxy_kmh":              spd_at_rel_k,
+        "arm":                         arm,
     }
 
 # =============================================================================
@@ -1549,12 +1625,13 @@ def print_summary(hand, events, r_stride, r_cadence, r_elbow, r_knee, r_head, r_
     print("="*60)
     arm_label  = "RIGHT" if hand == "R" else "LEFT"
     knee_label = "LEFT (front)" if hand == "R" else "RIGHT (front)"
-    print(f"  Bowling arm  : {arm_label}")
-    print(f"  Front knee   : {knee_label}")
-    print(f"  BFC frame    : {events['bfc_frame']}  ({events['bfc_frame']/fps:.2f}s)")
-    print(f"  FFC frame    : {events['ffc_frame']}  ({events['ffc_frame']/fps:.2f}s)")
-    print(f"  Arm-back frame:{events['arm_back_frame']}  ({events['arm_back_frame']/fps:.2f}s)")
-    print(f"  Release frame: {events['release_frame']}  ({events['release_frame']/fps:.2f}s)")
+    print(f"  Bowling arm    : {arm_label}")
+    print(f"  Front knee     : {knee_label}")
+    print(f"  Release method : {events.get('release_method','?')}")
+    print(f"  BFC frame      : {events['bfc_frame']}  ({events['bfc_frame']/fps:.2f}s)")
+    print(f"  FFC frame      : {events['ffc_frame']}  ({events['ffc_frame']/fps:.2f}s)")
+    print(f"  Arm-back frame : {events['arm_back_frame']}  ({events['arm_back_frame']/fps:.2f}s)")
+    print(f"  Release frame  : {events['release_frame']}  ({events['release_frame']/fps:.2f}s)")
     if r_cadence:
         print(f"\n📍 Step Cadence")
         print(f"   Last 5 frames : {r_cadence['last5_frames']}")
@@ -1572,8 +1649,10 @@ def print_summary(hand, events, r_stride, r_cadence, r_elbow, r_knee, r_head, r_
             print(f"   Extension       : {r_elbow['elbow_extension']:.1f}°")
     if r_knee:
         print(f"\n📍 Knee Flexion")
-        print(f"   Angle @ FFC    : {r_knee.get('knee_angle_at_ffc', np.nan):.1f}°")
-        print(f"   Angle @ release: {r_knee.get('knee_angle_at_release', np.nan):.1f}°")
+        k_ffc = r_knee.get("knee_angle_at_ffc", np.nan)
+        k_rel = r_knee.get("knee_angle_at_release", np.nan)
+        if np.isfinite(k_ffc): print(f"   Angle @ FFC    : {k_ffc:.1f}°")
+        if np.isfinite(k_rel): print(f"   Angle @ release: {k_rel:.1f}°")
     if r_head:
         o = r_head["ffc_offset"]
         print(f"\n📍 Head / COM Position  (front ankle: {r_head['front_ankle']})")
@@ -1590,7 +1669,7 @@ def print_summary(hand, events, r_stride, r_cadence, r_elbow, r_knee, r_head, r_
 # =============================================================================
 # ── SECTION 12 : DATASET HELPERS
 # =============================================================================
-def _safe_read_excel(path: str, expected_cols: list) -> pd.DataFrame:
+def _safe_read_excel(path, expected_cols):
     if not os.path.exists(path):
         return pd.DataFrame(columns=expected_cols)
     try:
@@ -1602,7 +1681,7 @@ def _safe_read_excel(path: str, expected_cols: list) -> pd.DataFrame:
         print(f"  ⚠️  Could not read {path}: {e} — starting fresh.")
         return pd.DataFrame(columns=expected_cols)
 
-def _safe_write_excel(df: pd.DataFrame, path: str):
+def _safe_write_excel(df, path):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     try:
         df.to_excel(path, index=False, engine="openpyxl")
@@ -1613,7 +1692,7 @@ def _safe_write_excel(df: pd.DataFrame, path: str):
         df.to_excel(fallback, index=False, engine="openpyxl")
         print(f"  ⚠️  {path} is open in Excel — saved to fallback: {fallback}")
 
-def _drop_existing_trial(df: pd.DataFrame, trial_id: str) -> pd.DataFrame:
+def _drop_existing_trial(df, trial_id):
     if "trial_id" in df.columns:
         return df[df["trial_id"].astype(str) != str(trial_id)].reset_index(drop=True)
     return df
@@ -1637,75 +1716,64 @@ FRAME_COLS = [
     "wrist_speed_m_s", "forearm_angle_deg", "wrist_angular_velocity_deg_s",
 ]
 
-def build_frame_dataset(
-        trial_id, df_xy, fps, cm_per_pixel,
-        bowling_arm, kside, front_ankle,
-        frame_to_angle, frame_to_knee_angle,
-) -> pd.DataFrame:
+def build_frame_dataset(trial_id, df_xy, fps, cm_per_pixel,
+                        bowling_arm, kside, front_ankle,
+                        frame_to_angle, frame_to_knee_angle):
     n = len(df_xy)
-    for col in ("left_ankle_y_sm", "right_ankle_y_sm", "head_x", "head_y", "videoDx_cm"):
+    for col in ("left_ankle_y_sm","right_ankle_y_sm","head_x","head_y","videoDx_cm"):
         if col not in df_xy.columns:
             df_xy[col] = np.nan
-
     rows = []
     for i in range(n):
-        frame_no   = int(df_xy.loc[i, "frame"])
-        elbow_ang  = frame_to_angle.get(frame_no, np.nan)      if frame_to_angle      else np.nan
-        knee_ang   = frame_to_knee_angle.get(frame_no, np.nan) if frame_to_knee_angle else np.nan
-
-        hx  = float(df_xy.loc[i, "head_x"])
-        hy  = float(df_xy.loc[i, "head_y"])
-        fax = float(df_xy.loc[i, f"{front_ankle}_x"])
-        fay = float(df_xy.loc[i, f"{front_ankle}_y"])
-        if all(np.isfinite(v) for v in (hx, hy, fax, fay)):
-            raw_dx = float(df_xy.loc[i, "videoDx_cm"])
-            h_dx_cm = raw_dx if np.isfinite(raw_dx) else (hx - fax) * cm_per_pixel
-            h_dy_cm = (hy - fay) * cm_per_pixel
-            h_d_cm  = float(np.hypot(h_dx_cm, h_dy_cm))
+        frame_no  = int(df_xy.loc[i,"frame"])
+        elbow_ang = frame_to_angle.get(frame_no, np.nan)      if frame_to_angle      else np.nan
+        knee_ang  = frame_to_knee_angle.get(frame_no, np.nan) if frame_to_knee_angle else np.nan
+        hx  = float(df_xy.loc[i,"head_x"])
+        hy  = float(df_xy.loc[i,"head_y"])
+        fax = float(df_xy.loc[i,f"{front_ankle}_x"])
+        fay = float(df_xy.loc[i,f"{front_ankle}_y"])
+        if all(np.isfinite(v) for v in (hx,hy,fax,fay)):
+            raw_dx  = float(df_xy.loc[i,"videoDx_cm"])
+            h_dx_cm = raw_dx if np.isfinite(raw_dx) else (hx-fax)*cm_per_pixel
+            h_dy_cm = (hy-fay)*cm_per_pixel
+            h_d_cm  = float(np.hypot(h_dx_cm,h_dy_cm))
         else:
             h_dx_cm = h_dy_cm = h_d_cm = np.nan
-
-        fa_rad  = float(df_xy.loc[i, "forearm_angle_rad"]) if "forearm_angle_rad" in df_xy.columns else np.nan
+        fa_rad  = float(df_xy.loc[i,"forearm_angle_rad"]) if "forearm_angle_rad" in df_xy.columns else np.nan
         fa_deg  = np.degrees(fa_rad) if np.isfinite(fa_rad) else np.nan
-        av_rads = float(df_xy.loc[i, "wrist_angular_vel_rads_sm"]) if "wrist_angular_vel_rads_sm" in df_xy.columns else np.nan
+        av_rads = float(df_xy.loc[i,"wrist_angular_vel_rads_sm"]) if "wrist_angular_vel_rads_sm" in df_xy.columns else np.nan
         av_degs = np.degrees(av_rads) if np.isfinite(av_rads) else np.nan
-
-        # Bowling wrist: always use the stabilised-and-smoothed column written
-        # by run_wrist_velocity (which reads from original df_xy, never swapped)
-        bw_x = float(df_xy.loc[i, "wrist_x_sm"]) if "wrist_x_sm" in df_xy.columns else float(df_xy.loc[i, f"{bowling_arm}_wrist_x"])
-        bw_y = float(df_xy.loc[i, "wrist_y_sm"]) if "wrist_y_sm" in df_xy.columns else float(df_xy.loc[i, f"{bowling_arm}_wrist_y"])
-
+        bw_x = float(df_xy.loc[i,"wrist_x_sm"]) if "wrist_x_sm" in df_xy.columns else float(df_xy.loc[i,f"{bowling_arm}_wrist_x"])
+        bw_y = float(df_xy.loc[i,"wrist_y_sm"]) if "wrist_y_sm" in df_xy.columns else float(df_xy.loc[i,f"{bowling_arm}_wrist_y"])
         rows.append({
-            "trial_id":    trial_id,   "view_mode":  VIEW_MODE,  "frame": frame_no,
-            "left_ankle_y":  float(df_xy.loc[i,"left_ankle_y"]),
-            "right_ankle_y": float(df_xy.loc[i,"right_ankle_y"]),
+            "trial_id": trial_id, "view_mode": VIEW_MODE, "frame": frame_no,
+            "left_ankle_y":   float(df_xy.loc[i,"left_ankle_y"]),
+            "right_ankle_y":  float(df_xy.loc[i,"right_ankle_y"]),
             "left_ankle_y_sm":  float(df_xy.loc[i,"left_ankle_y_sm"]),
             "right_ankle_y_sm": float(df_xy.loc[i,"right_ankle_y_sm"]),
             "bowling_shoulder_x": float(df_xy.loc[i,f"{bowling_arm}_shoulder_x"]),
             "bowling_shoulder_y": float(df_xy.loc[i,f"{bowling_arm}_shoulder_y"]),
             "bowling_elbow_x":    float(df_xy.loc[i,f"{bowling_arm}_elbow_x"]),
             "bowling_elbow_y":    float(df_xy.loc[i,f"{bowling_arm}_elbow_y"]),
-            "bowling_wrist_x":    bw_x,
-            "bowling_wrist_y":    bw_y,
-            "elbow_angle_deg":    elbow_ang,
-            "front_hip_x":        float(df_xy.loc[i,f"{kside}_hip_x"]),
-            "front_hip_y":        float(df_xy.loc[i,f"{kside}_hip_y"]),
-            "front_knee_x":       float(df_xy.loc[i,f"{kside}_knee_x"]),
-            "front_knee_y":       float(df_xy.loc[i,f"{kside}_knee_y"]),
-            "front_ankle_x":      fax,   "front_ankle_y": fay,
+            "bowling_wrist_x": bw_x, "bowling_wrist_y": bw_y,
+            "elbow_angle_deg": elbow_ang,
+            "front_hip_x":   float(df_xy.loc[i,f"{kside}_hip_x"]),
+            "front_hip_y":   float(df_xy.loc[i,f"{kside}_hip_y"]),
+            "front_knee_x":  float(df_xy.loc[i,f"{kside}_knee_x"]),
+            "front_knee_y":  float(df_xy.loc[i,f"{kside}_knee_y"]),
+            "front_ankle_x": fax, "front_ankle_y": fay,
             "front_knee_angle_deg": knee_ang,
-            "head_x": hx,   "head_y": hy,
+            "head_x": hx, "head_y": hy,
             "head_to_front_dx_cm": h_dx_cm,
             "head_to_front_dy_cm": h_dy_cm,
             "head_to_front_d_cm":  h_d_cm,
-            "wrist_speed_m_s":      float(df_xy.loc[i,"wrist_speed_mps_sm"]) if "wrist_speed_mps_sm" in df_xy.columns else np.nan,
-            "forearm_angle_deg":    fa_deg,
+            "wrist_speed_m_s": float(df_xy.loc[i,"wrist_speed_mps_sm"]) if "wrist_speed_mps_sm" in df_xy.columns else np.nan,
+            "forearm_angle_deg": fa_deg,
             "wrist_angular_velocity_deg_s": av_degs,
         })
-
     return pd.DataFrame(rows, columns=FRAME_COLS)
 
-def write_frame_dataset(df_new_frames: pd.DataFrame, trial_id: str, path: str):
+def write_frame_dataset(df_new_frames, trial_id, path):
     print(f"\n📋 Updating frame dataset → {path}")
     df_existing = _safe_read_excel(path, FRAME_COLS)
     df_existing = _drop_existing_trial(df_existing, trial_id)
@@ -1717,6 +1785,7 @@ def write_frame_dataset(df_new_frames: pd.DataFrame, trial_id: str, path: str):
 # =============================================================================
 MASTER_COLS = [
     "trial_id", "fps", "bowling_arm", "view_mode", "release_frame",
+    "release_method",
     "last5_steps_frame", "last5_step_intervals_s",
     "step_duration_mean_s", "step_duration_std_s", "step_duration_cv",
     "final5_total_duration_s",
@@ -1729,16 +1798,13 @@ MASTER_COLS = [
     "peak_wrist_speed_m_s", "wrist_speed_at_release_m_s",
 ]
 
-def build_master_row(
-        trial_id, fps, hand, events,
-        r_cadence, r_stride, r_elbow, r_knee, r_head, r_wrist,
-) -> dict:
+def build_master_row(trial_id, fps, hand, events,
+                     r_cadence, r_stride, r_elbow, r_knee, r_head, r_wrist):
     release_frame  = events["release_frame"]
     arm_back_frame = events["arm_back_frame"]
     bfc_frame      = events["bfc_frame"]
     ffc_frame      = events["ffc_frame"]
 
-    # ── Cadence ──────────────────────────────────────────────────────────────
     if r_cadence:
         intervals = r_cadence["intervals_s"]
         last5_str = str(r_cadence["last5_frames"])
@@ -1751,20 +1817,16 @@ def build_master_row(
         last5_str = intv_str = ""
         mean_i = std_i = cv_i = total_dur = np.nan
 
-    # ── Stride ───────────────────────────────────────────────────────────────
     stride_dur = r_stride["stride_duration_s"] if r_stride else np.nan
     stride_len = r_stride["stride_m"]          if r_stride else np.nan
 
-    # ── Elbow (FIX 3: now properly populated from r_elbow) ───────────────────
-    elbow_at_arm_back = r_elbow.get("elbow_at_arm_back", np.nan)  if r_elbow else np.nan
-    elbow_at_release  = r_elbow.get("elbow_at_release",  np.nan)  if r_elbow else np.nan
-    elbow_extension   = r_elbow.get("elbow_extension",   np.nan)  if r_elbow else np.nan
+    elbow_at_arm_back = r_elbow.get("elbow_at_arm_back", np.nan) if r_elbow else np.nan
+    elbow_at_release  = r_elbow.get("elbow_at_release",  np.nan) if r_elbow else np.nan
+    elbow_extension   = r_elbow.get("elbow_extension",   np.nan) if r_elbow else np.nan
 
-    # ── Knee (FIX 2: use shared event frames directly) ────────────────────────
     knee_at_ffc     = r_knee.get("knee_angle_at_ffc",     np.nan) if r_knee else np.nan
     knee_at_release = r_knee.get("knee_angle_at_release", np.nan) if r_knee else np.nan
 
-    # ── Head ─────────────────────────────────────────────────────────────────
     hd_ffc = r_head["ffc_offset"] if r_head else None
     hd_bfc = r_head["bfc_offset"] if r_head else None
 
@@ -1774,6 +1836,7 @@ def build_master_row(
         "bowling_arm":                hand,
         "view_mode":                  VIEW_MODE,
         "release_frame":              release_frame,
+        "release_method":             events.get("release_method", "unknown"),
         "last5_steps_frame":          last5_str,
         "last5_step_intervals_s":     intv_str,
         "step_duration_mean_s":       mean_i,
@@ -1782,15 +1845,15 @@ def build_master_row(
         "final5_total_duration_s":    total_dur,
         "stride_duration_s":          stride_dur,
         "stride_length_m":            stride_len,
-        "bfc_frame":                  bfc_frame,     # ← from shared events
-        "ffc_frame":                  ffc_frame,     # ← from shared events
-        "arm_back_frame":             arm_back_frame, # ← FIX 3: now populated
+        "bfc_frame":                  bfc_frame,
+        "ffc_frame":                  ffc_frame,
+        "arm_back_frame":             arm_back_frame,
         "release_frame.1":            release_frame,
-        "elbow_angle_arm_back_deg":   elbow_at_arm_back,  # ← FIX 3: populated
+        "elbow_angle_arm_back_deg":   elbow_at_arm_back,
         "elbow_angle_release_deg":    elbow_at_release,
-        "elbow_extension_deg":        elbow_extension,    # ← FIX 3: populated
-        "knee_angle_ffc_deg":         knee_at_ffc,        # ← FIX 2: shared frame
-        "knee_angle_release_deg":     knee_at_release,    # ← FIX 2: shared frame
+        "elbow_extension_deg":        elbow_extension,
+        "knee_angle_ffc_deg":         knee_at_ffc,
+        "knee_angle_release_deg":     knee_at_release,
         "head_dx_ffc_cm":             hd_ffc["Dx_cm"] if hd_ffc else np.nan,
         "head_dy_ffc_cm":             hd_ffc["Dy_cm"] if hd_ffc else np.nan,
         "head_d_ffc_cm":              hd_ffc["D_cm"]  if hd_ffc else np.nan,
@@ -1801,7 +1864,7 @@ def build_master_row(
         "wrist_speed_at_release_m_s": r_wrist["speed_at_release_mps"]        if r_wrist else np.nan,
     }
 
-def write_master_dataset(master_row: dict, trial_id: str, path: str):
+def write_master_dataset(master_row, trial_id, path):
     print(f"\n📋 Updating master dataset → {path}")
     df_existing = _safe_read_excel(path, MASTER_COLS)
     df_existing = _drop_existing_trial(df_existing, trial_id)
@@ -1832,35 +1895,20 @@ def main():
 
     df_xy, df_conf, fps, width, height, total_frames = extract_keypoints(VIDEO_PATH, model)
 
-    # ── Compute ALL shared events ONCE ───────────────────────────────────────
-    events = detect_shared_events(df_xy, fps, bowling_wrist)
+    # ── Compute ALL shared events ONCE (upgraded release detection) ───────────
+    events = detect_shared_events(df_xy, fps, bowling_wrist, video_path=VIDEO_PATH)
     print(f"\n🏏 Release frame: {events['release_frame']}  "
-          f"({events['release_frame']/fps:.2f}s)")
+          f"({events['release_frame']/fps:.2f}s)  [{events['release_method']}]")
 
-    # ── Run all modules (each receives the events dict) ───────────────────────
-    r_cadence = run_step_cadence(
-        df_xy, fps, events, VIDEO_PATH, width, height)
-
-    r_stride = run_delivery_stride(
-        df_xy, fps, events, meters_per_pixel, VIDEO_PATH, width, height)
-
-    r_elbow = run_elbow_flexion(
-        df_xy, fps, events, bowling_wrist, VIDEO_PATH, width, height)
-
-    r_knee = run_knee_flexion(
-        df_xy, df_conf, fps, events, knee_side, VIDEO_PATH, width, height)
-
-    r_head = run_head_position(
-        df_xy, fps, events, bowling_wrist,
-        cm_per_pixel, pixels_per_meter, VIDEO_PATH, width, height)
-
-    r_wrist = run_wrist_velocity(
-        df_xy, fps, events, bowling_wrist,
-        meters_per_pixel, VIDEO_PATH, width, height)
+    r_cadence = run_step_cadence(df_xy, fps, events, VIDEO_PATH, width, height)
+    r_stride  = run_delivery_stride(df_xy, fps, events, meters_per_pixel, VIDEO_PATH, width, height)
+    r_elbow   = run_elbow_flexion(df_xy, fps, events, bowling_wrist, VIDEO_PATH, width, height)
+    r_knee    = run_knee_flexion(df_xy, df_conf, fps, events, knee_side, VIDEO_PATH, width, height)
+    r_head    = run_head_position(df_xy, fps, events, bowling_wrist, cm_per_pixel, pixels_per_meter, VIDEO_PATH, width, height)
+    r_wrist   = run_wrist_velocity(df_xy, fps, events, bowling_wrist, meters_per_pixel, VIDEO_PATH, width, height)
 
     print_summary(hand, events, r_stride, r_cadence, r_elbow, r_knee, r_head, r_wrist, fps)
 
-    # ── Dataset writes ────────────────────────────────────────────────────────
     kside = r_knee["kside"] if r_knee and "kside" in r_knee else (
         "left" if knee_side == "L" else "right")
     front_ankle = (r_head["front_ankle"] if r_head and "front_ankle" in r_head
