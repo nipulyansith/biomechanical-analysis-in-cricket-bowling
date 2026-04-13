@@ -1,0 +1,34 @@
+INTER-ANNOTATOR VARIABILITY REPORT
+======================================================================
+Generated: 2026-04-13T15:14:49
+Annotators: 9
+Videos: 1
+Rows loaded: 495
+
+GLOBAL SUMMARY
+----------------------------------------------------------------------
+Overall MPJPE (pixel): 13.229
+Overall MPJPE (cm):    2.876
+Lowest-variability joint:  Head
+Highest-variability joint: Left Elbow
+
+PER-JOINT SUMMARY
+----------------------------------------------------------------------
+    joint_name  mpjpe_px  mpjpe_cm   sd_px   sd_cm  median_px  median_cm  p95_px  p95_cm  mean_not_visible_rate
+          Head    4.0904    0.8894  2.1841  0.4749     3.9022     0.8485  8.7326  1.8990                    0.0
+ Left Shoulder    9.7043    2.1097  6.1181  1.3301     8.7326     1.8990 20.6199  4.4829                    0.0
+Right Shoulder   11.9414    2.5960  7.3204  1.5914    10.5019     2.2838 24.8788  5.4080                    0.0
+    Left Elbow   26.7318    5.8115 71.0470 15.4455    10.4952     2.2812 33.3704  7.2540                    0.0
+   Right Elbow   24.6085    5.3499 72.3275 15.7240     9.2049     2.0008 27.7473  6.0326                    0.0
+    Left Wrist    6.8720    1.4941  3.9231  0.8529     6.5089     1.4154 13.0782  2.8440                    0.0
+   Right Wrist    7.9619    1.7311  4.3283  0.9410     7.1967     1.5644 14.8842  3.2358                    0.0
+     Left Knee    9.6646    2.1010  5.7183  1.2433     8.7326     1.8980 20.6133  4.4812                    0.0
+    Right Knee   11.6030    2.5225  6.7935  1.4769    10.4952     2.2823 24.0035  5.2187                    0.0
+    Left Ankle   14.8747    3.2337  9.3332  2.0291    14.5543     3.1638 34.3016  7.4579                    0.0
+   Right Ankle   17.4631    3.7965 10.3027  2.2398    15.7864     3.4317 36.0053  7.8278                    0.0
+
+INTERPRETATION
+----------------------------------------------------------------------
+Primary metric for this experiment is MPJPE.
+MPJPE in cm is the most interpretable real-world measure of disagreement.
+Frames/joints marked skipped or not_visible were excluded from distance calculations.

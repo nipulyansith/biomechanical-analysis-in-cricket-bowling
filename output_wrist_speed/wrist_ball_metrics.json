@@ -1,0 +1,36 @@
+{
+  "video": "side3.MOV",
+  "fps": 59.937565036420395,
+  "bowling_arm": "LEFT",
+  "release_detect_mode": "WRIST_HIGHEST",
+  "calibration": {
+    "stump_height_m": 0.711,
+    "meters_per_pixel": 0.003703074774174514
+  },
+  "release": {
+    "release_idx": 322,
+    "release_frame": 323
+  },
+  "wrist_linear_velocity": {
+    "wrist_speed_at_release_mps": 15.411057891020246,
+    "wrist_speed_at_release_kmh": 55.479808407672884,
+    "peak_wrist_speed_overall_mps": 15.411057891020246,
+    "peak_wrist_speed_overall_frame": 323,
+    "peak_wrist_speed_near_release_mps": 15.411057891020246,
+    "peak_wrist_speed_near_release_frame": 323
+  },
+  "wrist_angular_velocity": {
+    "peak_abs_angular_vel_near_release_rads": -18.301822029714373,
+    "peak_abs_angular_vel_near_release_frame": 321,
+    "note": "Angular velocity computed from forearm segment angle (elbow->wrist) in 2D."
+  },
+  "ball_release_speed_estimates": {
+    "proxy_mode_a": {
+      "method": "Mode A (proxy)",
+      "ball_speed_proxy_mps": 15.411057891020246,
+      "ball_speed_proxy_kmh": 55.479808407672884,
+      "note": "Proxy estimate using wrist speed at detected release. Literature: wrist velocity correlates with ball release speed, but not identical."
+    },
+    "mode_b_ball_tracking": null
+  }
+}
