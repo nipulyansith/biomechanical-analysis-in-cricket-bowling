@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Distance Annotation Tool</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@400;600;700&display=swap');
+
+  :root {
+    --bg: #0d0f12;
+    --bg2: #13161b;
+    --bg3: #1a1e25;
+    --border: #2a2f3a;
+    --accent: #00e5a0;
+    --accent2: #0099ff;
+    --warn: #ffb340;
+    --danger: #ff4757;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  header h1 {
+    font-family: var(--font-head);
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.3px;
+  }
+  header .badge {
+    background: rgba(0,229,160,0.1);
+    border: 1px solid rgba(0,229,160,0.3);
+    color: var(--accent);
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    height: calc(100vh - 53px);
+    overflow: hidden;
+  }
+
+  .sidebar {
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .section {
+    border-bottom: 1px solid var(--border);
+    padding: 16px;
+  }
+  .section-title {
+    font-family: var(--font-head);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .step-indicator {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: default;
+    transition: all 0.15s;
+  }
+  .step.active {
+    background: rgba(0,229,160,0.07);
+    border-color: rgba(0,229,160,0.25);
+  }
+  .step.done { opacity: 0.5; }
+  .step-num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600;
+    flex-shrink: 0;
+  }
+  .step.active .step-num { background: var(--accent); color: #000; border-color: var(--accent); }
+  .step.done .step-num { background: var(--bg3); color: var(--accent); border-color: var(--accent); }
+  .step-label { font-size: 12px; }
+  .step-sub { font-size: 11px; color: var(--muted); }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .info-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+  }
+  .info-card .label { font-size: 10px; color: var(--muted); margin-bottom: 4px; letter-spacing: 0.5px; }
+  .info-card .value { font-size: 14px; font-weight: 600; color: var(--accent); }
+
+  .btn {
+    width: 100%;
+    padding: 9px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg3);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: rgba(0,229,160,0.1); border-color: rgba(0,229,160,0.4); color: var(--accent); }
+  .btn.primary:hover { background: rgba(0,229,160,0.2); }
+  .btn.danger { border-color: rgba(255,71,87,0.4); color: var(--danger); }
+  .btn.danger:hover { background: rgba(255,71,87,0.1); }
+  .btn.disabled { opacity: 0.35; pointer-events: none; }
+  .btn-icon { font-size: 14px; }
+
+  .annotator-input {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .annotator-input label { font-size: 11px; color: var(--muted); }
+  .annotator-input input {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .annotator-input input:focus { border-color: var(--accent); }
+
+  .status-bar {
+    background: rgba(0,229,160,0.06);
+    border: 1px solid rgba(0,229,160,0.2);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--accent);
+    line-height: 1.4;
+  }
+
+  .point-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .point-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    background: var(--bg3);
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .point-row .pt-label { color: var(--muted); }
+  .point-row .pt-coords { color: var(--accent2); }
+
+  .main-area {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .tab-bar {
+    display: flex;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+  }
+  .tab {
+    padding: 11px 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  .tab-content { display: none; flex: 1; overflow: hidden; }
+  .tab-content.active { display: flex; flex-direction: column; flex: 1; }
+
+  #canvas-container {
+    flex: 1;
+    overflow: auto;
+    background: #08090b;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 16px;
+  }
+
+  #main-canvas {
+    cursor: crosshair;
+    display: block;
+    max-width: 100%;
+  }
+
+  .chart-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-content: start;
+  }
+
+  .chart-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .chart-card h3 {
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .chart-card .chart-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .chart-card canvas { max-height: 220px; }
+
+  .chart-card.full { grid-column: 1 / -1; }
+
+  .results-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+
+  .results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .results-table th {
+    text-align: left;
+    padding: 8px 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+  .results-table td {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .results-table tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+  .results-table .error-low { color: var(--accent); }
+  .results-table .error-med { color: var(--warn); }
+  .results-table .error-high { color: var(--danger); }
+
+  .avg-row {
+    display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .avg-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    min-width: 140px;
+  }
+  .avg-card .al { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+  .avg-card .av { font-size: 18px; font-weight: 600; color: var(--accent); }
+
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin: 20px;
+  }
+  .upload-zone:hover { border-color: var(--accent); }
+  .upload-zone.drag { border-color: var(--accent); background: rgba(0,229,160,0.05); }
+  .upload-zone .uz-icon { font-size: 40px; margin-bottom: 12px; }
+  .upload-zone h3 { font-family: var(--font-head); font-size: 15px; margin-bottom: 6px; }
+  .upload-zone p { color: var(--muted); font-size: 12px; }
+
+  .no-data {
+    color: var(--muted);
+    text-align: center;
+    padding: 40px;
+    font-size: 13px;
+  }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AnnotCalib</h1>
+  <span class="badge">DISTANCE ESTIMATION TOOL</span>
+</header>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <div class="section">
+      <div class="section-title">Annotator</div>
+      <div class="annotator-input">
+        <label>Name / ID</label>
+        <input type="text" id="annotator-name" placeholder="e.g. researcher_01" value="annotator_01">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Workflow</div>
+      <div class="step-indicator">
+        <div class="step active" id="step-upload">
+          <div class="step-num">0</div>
+          <div><div class="step-label">Load image / video frame</div></div>
+        </div>
+        <div class="step" id="step-calib">
+          <div class="step-num">1</div>
+          <div>
+            <div class="step-label">Calibration</div>
+            <div class="step-sub">Click stump top → bottom</div>
+          </div>
+        </div>
+        <div class="step" id="step-horiz">
+          <div class="step-num">2</div>
+          <div>
+            <div class="step-label">Horizontal points</div>
+            <div class="step-sub">Origin + 14 markers (1 ft apart)</div>
+          </div>
+        </div>
+        <div class="step" id="step-vert">
+          <div class="step-num">3</div>
+          <div>
+            <div class="step-label">Vertical points</div>
+            <div class="step-sub">Base + 7 markers (1 ft apart)</div>
+          </div>
+        </div>
+        <div class="step" id="step-done">
+          <div class="step-num">4</div>
+          <div><div class="step-label">Review & Export</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Status</div>
+      <div class="status-bar" id="status-msg">Load an image to begin.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Calibration Info</div>
+      <div class="info-grid">
+        <div class="info-card">
+          <div class="label">PIXEL DIST</div>
+          <div class="value" id="cal-px">—</div>
+        </div>
+        <div class="info-card">
+          <div class="label">PX / METER</div>
+          <div class="value" id="cal-ppm">—</div>
+        </div>
+        <div class="info-card">
+          <div class="label">CM / PX</div>
+          <div class="value" id="cal-cpp">—</div>
+        </div>
+        <div class="info-card">
+          <div class="label">STUMP HT</div>
+          <div class="value">71.1 cm</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Current Points</div>
+      <div class="point-list" id="point-list">
+        <div class="no-data" style="padding:10px;">No points yet.</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Actions</div>
+      <button class="btn" id="btn-undo"><span class="btn-icon">↩</span> Undo last point</button>
+      <button class="btn danger" id="btn-reset"><span class="btn-icon">✕</span> Reset all</button>
+      <button class="btn primary disabled" id="btn-export"><span class="btn-icon">↓</span> Export CSV</button>
+    </div>
+
+  </div>
+
+  <!-- MAIN -->
+  <div class="main-area">
+    <div class="tab-bar">
+      <div class="tab active" data-tab="canvas">Canvas</div>
+      <div class="tab" data-tab="charts">Error Charts</div>
+      <div class="tab" data-tab="results">Results Table</div>
+    </div>
+
+    <!-- CANVAS TAB -->
+    <div class="tab-content active" id="tab-canvas">
+      <div id="canvas-container">
+        <div class="upload-zone" id="upload-zone">
+          <div class="uz-icon">🎯</div>
+          <h3>Drop image / video frame here</h3>
+          <p>PNG, JPG, WebP, BMP — or click to browse</p>
+          <input type="file" id="file-input" accept="image/*,video/*" style="display:none">
+        </div>
+        <canvas id="main-canvas" style="display:none;"></canvas>
+      </div>
+    </div>
+
+    <!-- CHARTS TAB -->
+    <div class="tab-content" id="tab-charts">
+      <div class="chart-area" id="chart-area">
+        <div class="no-data" style="grid-column:1/-1;">Complete annotation to see error charts.</div>
+      </div>
+    </div>
+
+    <!-- RESULTS TAB -->
+    <div class="tab-content" id="tab-results">
+      <div class="results-area" id="results-area">
+        <div class="no-data">Complete annotation to see results.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Constants ───────────────────────────────────────────────────────────────
+const STUMP_HEIGHT_M = 0.711;
+const STUMP_HEIGHT_CM = 71.1;
+const FOOT_CM = 30.48;
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let state = {
+  phase: 'upload',     // upload | calib | horiz | vert | done
+  calibPts: [],        // [{x,y}, {x,y}] top + bottom
+  horizPts: [],        // 15 pts: origin + 14 markers
+  vertPts: [],         // 8 pts: base + 7 markers
+  pxPerMeter: null,
+  cmPerPx: null,
+  image: null,
+  charts: {},
+};
+
+// ─── DOM ─────────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('main-canvas');
+const ctx = canvas.getContext('2d');
+const uploadZone = document.getElementById('upload-zone');
+const fileInput = document.getElementById('file-input');
+const statusMsg = document.getElementById('status-msg');
+
+// ─── Tabs ────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+  });
+});
+
+// ─── Upload ──────────────────────────────────────────────────────────────────
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) loadFile(file);
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+
+function loadFile(file) {
+  if (file.type.startsWith('video/')) {
+    const video = document.createElement('video');
+    video.src = URL.createObjectURL(file);
+    video.muted = true;
+    video.addEventListener('loadeddata', () => {
+      video.currentTime = 0.01;
+    });
+    video.addEventListener('seeked', () => {
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = video.videoWidth;
+      tmpCanvas.height = video.videoHeight;
+      tmpCanvas.getContext('2d').drawImage(video, 0, 0);
+      const img = new Image();
+      img.onload = () => initCanvas(img);
+      img.src = tmpCanvas.toDataURL();
+      URL.revokeObjectURL(video.src);
+    });
+    return;
+  }
+  const img = new Image();
+  img.onload = () => initCanvas(img);
+  img.src = URL.createObjectURL(file);
+}
+
+function initCanvas(img) {
+  state.image = img;
+  canvas.width = img.width;
+  canvas.height = img.height;
+  uploadZone.style.display = 'none';
+  canvas.style.display = 'block';
+  drawAll();
+  setPhase('calib');
+}
+
+// ─── Canvas click ─────────────────────────────────────────────────────────────
+canvas.addEventListener('click', e => {
+  if (!state.image) return;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+
+  if (state.phase === 'calib') {
+    state.calibPts.push({x, y});
+    if (state.calibPts.length === 2) {
+      computeCalibration();
+      setPhase('horiz');
+    } else {
+      setStatus('Calibration: click the <strong>bottom</strong> of the stump.');
+    }
+  } else if (state.phase === 'horiz') {
+    state.horizPts.push({x, y});
+    const n = state.horizPts.length;
+    if (n <= 15) {
+      setStatus(`Horizontal: Point ${n - 1} placed. ${n < 15 ? `Click point ${n}.` : ''}`);
+      if (n === 15) setPhase('vert');
+    }
+  } else if (state.phase === 'vert') {
+    state.vertPts.push({x, y});
+    const n = state.vertPts.length;
+    if (n <= 8) {
+      setStatus(`Vertical: Point ${n - 1} placed. ${n < 8 ? `Click point ${n}.` : ''}`);
+      if (n === 8) setPhase('done');
+    }
+  }
+
+  drawAll();
+  updatePointList();
+});
+
+// ─── Calibration ─────────────────────────────────────────────────────────────
+function computeCalibration() {
+  const [top, bot] = state.calibPts;
+  const dx = bot.x - top.x;
+  const dy = bot.y - top.y;
+  const px = Math.sqrt(dx * dx + dy * dy);
+  state.pxPerMeter = px / STUMP_HEIGHT_M;
+  state.cmPerPx = STUMP_HEIGHT_CM / px;
+
+  document.getElementById('cal-px').textContent = px.toFixed(1);
+  document.getElementById('cal-ppm').textContent = state.pxPerMeter.toFixed(1);
+  document.getElementById('cal-cpp').textContent = state.cmPerPx.toFixed(4);
+}
+
+// ─── Draw ─────────────────────────────────────────────────────────────────────
+function drawAll() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (state.image) ctx.drawImage(state.image, 0, 0);
+
+  // Calibration
+  state.calibPts.forEach((p, i) => {
+    drawPoint(p, i === 0 ? '#ffb340' : '#ff4757', i === 0 ? '▲ Top' : '▼ Bot');
+  });
+  if (state.calibPts.length === 2) {
+    drawLine(state.calibPts[0], state.calibPts[1], '#ffb340', 2, [6, 4]);
+  }
+
+  // Horizontal
+  drawAnnotation(state.horizPts, '#00e5a0', 'H');
+
+  // Vertical
+  drawAnnotation(state.vertPts, '#0099ff', 'V');
+}
+
+function drawAnnotation(pts, color, prefix) {
+  pts.forEach((p, i) => {
+    const label = `${prefix}${i}`;
+    drawPoint(p, color, label);
+    if (i > 0) drawLine(pts[i - 1], p, color, 1.5, []);
+  });
+}
+
+function drawPoint(p, color, label) {
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // halo
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, 9, 0, Math.PI * 2);
+  ctx.strokeStyle = color + '55';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // label
+  if (label) {
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 11px JetBrains Mono, monospace';
+    ctx.fillText(label, p.x + 12, p.y - 6);
+    ctx.fillStyle = color;
+    ctx.fillText(label, p.x + 11, p.y - 7);
+  }
+}
+
+function drawLine(a, b, color, width, dash) {
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.setLineDash(dash);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// ─── Phase management ─────────────────────────────────────────────────────────
+function setPhase(phase) {
+  state.phase = phase;
+  const steps = ['upload', 'calib', 'horiz', 'vert', 'done'];
+  const labels = ['step-upload', 'step-calib', 'step-horiz', 'step-vert', 'step-done'];
+  const current = steps.indexOf(phase);
+  labels.forEach((id, i) => {
+    const el = document.getElementById(id);
+    el.classList.remove('active', 'done');
+    if (i < current) el.classList.add('done');
+    else if (i === current) el.classList.add('active');
+  });
+
+  const msgs = {
+    upload: 'Load an image to begin.',
+    calib: 'Calibration: click the <strong>top</strong> of the cricket stump.',
+    horiz: 'Horizontal: click Point 0 (stump origin / base), then points 1–14 (each 1 ft apart).',
+    vert: 'Vertical: click Point 0 (base), then points 1–7 (each 1 ft apart).',
+    done: 'Annotation complete! Check the Charts and Results tabs.',
+  };
+  setStatus(msgs[phase]);
+
+  if (phase === 'done') {
+    document.getElementById('btn-export').classList.remove('disabled');
+    renderCharts();
+    renderResults();
+  }
+}
+
+function setStatus(msg) { statusMsg.innerHTML = msg; }
+
+// ─── Point list ───────────────────────────────────────────────────────────────
+function updatePointList() {
+  const list = document.getElementById('point-list');
+  let rows = [];
+  state.calibPts.forEach((p, i) => {
+    rows.push(`<div class="point-row"><span class="pt-label">CAL ${i === 0 ? '▲Top' : '▼Bot'}</span><span class="pt-coords">${Math.round(p.x)}, ${Math.round(p.y)}</span></div>`);
+  });
+  state.horizPts.forEach((p, i) => {
+    rows.push(`<div class="point-row"><span class="pt-label">H${i}</span><span class="pt-coords">${Math.round(p.x)}, ${Math.round(p.y)}</span></div>`);
+  });
+  state.vertPts.forEach((p, i) => {
+    rows.push(`<div class="point-row"><span class="pt-label">V${i}</span><span class="pt-coords">${Math.round(p.x)}, ${Math.round(p.y)}</span></div>`);
+  });
+  list.innerHTML = rows.length ? rows.join('') : '<div class="no-data" style="padding:10px;">No points yet.</div>';
+}
+
+// ─── Calculations ─────────────────────────────────────────────────────────────
+function calcSegments(pts, label) {
+  const rows = [];
+  let cumCalcPx = 0;   // accumulated pixel distance from pt0
+  for (let i = 1; i < pts.length; i++) {
+    // ── Segment (i-1 → i) ──
+    const a = pts[i - 1], b = pts[i];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const segPx = Math.sqrt(dx * dx + dy * dy);
+    const segCalcCm = segPx * state.cmPerPx;
+    const segActualCm = FOOT_CM;                       // every segment is exactly 1 ft
+    const segAbserr = Math.abs(segCalcCm - segActualCm);
+    const segPcterr = (segAbserr / segActualCm) * 100;
+
+    // ── Cumulative (pt0 → pt i) ──
+    cumCalcPx += segPx;
+    const cumCalcCm = cumCalcPx * state.cmPerPx;
+    const cumActualCm = FOOT_CM * i;                   // i feet from origin
+    const cumAbserr = Math.abs(cumCalcCm - cumActualCm);
+    const cumPcterr = (cumAbserr / cumActualCm) * 100;
+
+    rows.push({
+      seg: `${i - 1}→${i}`,
+      stepFt: i,
+      // segment fields
+      pxDist:    segPx.toFixed(2),
+      calcCm:    segCalcCm.toFixed(3),
+      actualCm:  segActualCm.toFixed(3),
+      abserr:    segAbserr.toFixed(3),
+      pcterr:    segPcterr.toFixed(2),
+      // cumulative fields
+      cumCalcCm:   cumCalcCm.toFixed(3),
+      cumActualCm: cumActualCm.toFixed(3),
+      cumAbserr:   cumAbserr.toFixed(3),
+      cumPcterr:   cumPcterr.toFixed(2),
+      axis: label
+    });
+  }
+  return rows;
+}
+
+function getAllRows() {
+  return [
+    ...calcSegments(state.horizPts, 'horizontal'),
+    ...calcSegments(state.vertPts, 'vertical'),
+  ];
+}
+
+// ─── Charts ───────────────────────────────────────────────────────────────────
+function renderCharts() {
+  const area = document.getElementById('chart-area');
+  area.innerHTML = `
+    <div class="chart-card"><h3>Horizontal — Segment Absolute Error</h3><div class="chart-sub">cm error per 1 ft segment</div><canvas id="ch-h-abs"></canvas></div>
+    <div class="chart-card"><h3>Vertical — Segment Absolute Error</h3><div class="chart-sub">cm error per 1 ft segment</div><canvas id="ch-v-abs"></canvas></div>
+    <div class="chart-card"><h3>Horizontal — Segment % Error</h3><div class="chart-sub">percentage error per segment</div><canvas id="ch-h-pct"></canvas></div>
+    <div class="chart-card"><h3>Vertical — Segment % Error</h3><div class="chart-sub">percentage error per segment</div><canvas id="ch-v-pct"></canvas></div>
+    <div class="chart-card full"><h3>Cumulative Error Growth</h3><div class="chart-sub">absolute cumulative error vs distance from stump — shows how calibration accuracy degrades with distance</div><canvas id="ch-cum-abs"></canvas></div>
+    <div class="chart-card full"><h3>Cumulative % Error Growth</h3><div class="chart-sub">percentage cumulative error vs distance from stump</div><canvas id="ch-cum-pct"></canvas></div>
+    <div class="chart-card full"><h3>Cumulative: Calculated vs Actual Distance</h3><div class="chart-sub">cumulative measured vs ground-truth distance (solid = calculated, dashed = actual)</div><canvas id="ch-combined"></canvas></div>
+    <div class="chart-card full"><h3>Segment-wise Error Bar Chart</h3><div class="chart-sub">absolute error per segment (green = horizontal, blue = vertical)</div><canvas id="ch-bar"></canvas></div>
+  `;
+
+  const hRows = calcSegments(state.horizPts, 'horizontal');
+  const vRows = calcSegments(state.vertPts, 'vertical');
+
+  const chartDefaults = {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#6b7280', font: { family: 'JetBrains Mono', size: 11 } } },
+      tooltip: { backgroundColor: '#1a1e25', borderColor: '#2a2f3a', borderWidth: 1, titleColor: '#e8eaf0', bodyColor: '#6b7280' }
+    },
+    scales: {
+      x: { grid: { color: '#1f2430' }, ticks: { color: '#6b7280', font: { family: 'JetBrains Mono', size: 10 } } },
+      y: { grid: { color: '#1f2430' }, ticks: { color: '#6b7280', font: { family: 'JetBrains Mono', size: 10 } }, beginAtZero: true }
+    }
+  };
+
+  function makeLineChart(id, labels, datasets) {
+    const c = document.getElementById(id);
+    if (!c) return;
+    return new Chart(c, { type: 'line', data: { labels, datasets }, options: { ...chartDefaults } });
+  }
+
+  // Segment absolute error
+  makeLineChart('ch-h-abs', hRows.map(r => `${r.stepFt}ft`), [{
+    label: 'Segment Abs Error (cm)',
+    data: hRows.map(r => parseFloat(r.abserr)),
+    borderColor: '#00e5a0', backgroundColor: 'rgba(0,229,160,0.1)',
+    pointBackgroundColor: '#00e5a0', fill: true, tension: 0.3
+  }]);
+
+  makeLineChart('ch-v-abs', vRows.map(r => `${r.stepFt}ft`), [{
+    label: 'Segment Abs Error (cm)',
+    data: vRows.map(r => parseFloat(r.abserr)),
+    borderColor: '#0099ff', backgroundColor: 'rgba(0,153,255,0.1)',
+    pointBackgroundColor: '#0099ff', fill: true, tension: 0.3
+  }]);
+
+  // Segment % error
+  makeLineChart('ch-h-pct', hRows.map(r => `${r.stepFt}ft`), [{
+    label: 'Segment % Error',
+    data: hRows.map(r => parseFloat(r.pcterr)),
+    borderColor: '#ffb340', backgroundColor: 'rgba(255,179,64,0.1)',
+    pointBackgroundColor: '#ffb340', fill: true, tension: 0.3
+  }]);
+
+  makeLineChart('ch-v-pct', vRows.map(r => `${r.stepFt}ft`), [{
+    label: 'Segment % Error',
+    data: vRows.map(r => parseFloat(r.pcterr)),
+    borderColor: '#ff4757', backgroundColor: 'rgba(255,71,87,0.1)',
+    pointBackgroundColor: '#ff4757', fill: true, tension: 0.3
+  }]);
+
+  // Cumulative absolute error growth
+  makeLineChart('ch-cum-abs', hRows.map(r => `${r.stepFt}ft`), [
+    {
+      label: 'H Cumulative Abs Error (cm)',
+      data: hRows.map(r => parseFloat(r.cumAbserr)),
+      borderColor: '#00e5a0', backgroundColor: 'rgba(0,229,160,0.08)',
+      pointBackgroundColor: '#00e5a0', fill: true, tension: 0.3
+    },
+    {
+      label: 'V Cumulative Abs Error (cm)',
+      data: vRows.map(r => parseFloat(r.cumAbserr)),
+      borderColor: '#0099ff', backgroundColor: 'rgba(0,153,255,0.08)',
+      pointBackgroundColor: '#0099ff', fill: true, tension: 0.3
+    }
+  ]);
+
+  // Cumulative % error growth
+  makeLineChart('ch-cum-pct', hRows.map(r => `${r.stepFt}ft`), [
+    {
+      label: 'H Cumulative % Error',
+      data: hRows.map(r => parseFloat(r.cumPcterr)),
+      borderColor: '#ffb340', backgroundColor: 'rgba(255,179,64,0.08)',
+      pointBackgroundColor: '#ffb340', fill: true, tension: 0.3
+    },
+    {
+      label: 'V Cumulative % Error',
+      data: vRows.map(r => parseFloat(r.cumPcterr)),
+      borderColor: '#ff4757', backgroundColor: 'rgba(255,71,87,0.08)',
+      pointBackgroundColor: '#ff4757', fill: true, tension: 0.3
+    }
+  ]);
+
+  // Combined cumulative calculated vs actual (using pre-computed cumulative fields)
+  new Chart(document.getElementById('ch-combined'), {
+    type: 'line',
+    data: {
+      labels: hRows.map(r => `${r.stepFt}ft`),
+      datasets: [
+        { label: 'H Calculated (cm)', data: hRows.map(r => parseFloat(r.cumCalcCm)), borderColor: '#00e5a0', pointBackgroundColor: '#00e5a0', tension: 0.3 },
+        { label: 'H Actual (cm)',      data: hRows.map(r => parseFloat(r.cumActualCm)), borderColor: '#00e5a0', borderDash: [6, 3], pointStyle: false, tension: 0.3 },
+        { label: 'V Calculated (cm)', data: vRows.map(r => parseFloat(r.cumCalcCm)), borderColor: '#0099ff', pointBackgroundColor: '#0099ff', tension: 0.3 },
+        { label: 'V Actual (cm)',      data: vRows.map(r => parseFloat(r.cumActualCm)), borderColor: '#0099ff', borderDash: [6, 3], pointStyle: false, tension: 0.3 },
+      ]
+    },
+    options: { ...chartDefaults }
+  });
+
+  // Segment bar chart
+  new Chart(document.getElementById('ch-bar'), {
+    type: 'bar',
+    data: {
+      labels: [...hRows.map(r => `H:${r.seg}`), ...vRows.map(r => `V:${r.seg}`)],
+      datasets: [{
+        label: 'Segment Abs Error (cm)',
+        data: [...hRows.map(r => parseFloat(r.abserr)), ...vRows.map(r => parseFloat(r.abserr))],
+        backgroundColor: [...hRows.map(() => 'rgba(0,229,160,0.6)'), ...vRows.map(() => 'rgba(0,153,255,0.6)')],
+        borderColor:     [...hRows.map(() => '#00e5a0'),              ...vRows.map(() => '#0099ff')],
+        borderWidth: 1
+      }]
+    },
+    options: { ...chartDefaults }
+  });
+}
+
+// ─── Results Table ─────────────────────────────────────────────────────────────
+function renderResults() {
+  const area = document.getElementById('results-area');
+  const rows = getAllRows();
+  if (!rows.length) { area.innerHTML = '<div class="no-data">No data.</div>'; return; }
+
+  const hRows = rows.filter(r => r.axis === 'horizontal');
+  const vRows = rows.filter(r => r.axis === 'vertical');
+
+  const avgHabs    = hRows.reduce((s, r) => s + parseFloat(r.abserr), 0) / hRows.length;
+  const avgHpct    = hRows.reduce((s, r) => s + parseFloat(r.pcterr), 0) / hRows.length;
+  const avgVabs    = vRows.reduce((s, r) => s + parseFloat(r.abserr), 0) / (vRows.length || 1);
+  const avgVpct    = vRows.reduce((s, r) => s + parseFloat(r.pcterr), 0) / (vRows.length || 1);
+  const maxHcumErr = hRows.length ? parseFloat(hRows[hRows.length - 1].cumAbserr) : 0;
+  const maxVcumErr = vRows.length ? parseFloat(vRows[vRows.length - 1].cumAbserr) : 0;
+
+  function errClass(pct) {
+    if (pct < 5) return 'error-low';
+    if (pct < 15) return 'error-med';
+    return 'error-high';
+  }
+
+  function rowsHTML(data) {
+    return data.map(r => `
+      <tr>
+        <td>${r.axis}</td>
+        <td>${r.seg}</td>
+        <td>${r.pxDist}</td>
+        <td>${r.calcCm}</td>
+        <td>${r.actualCm}</td>
+        <td class="${errClass(parseFloat(r.pcterr))}">${r.abserr}</td>
+        <td class="${errClass(parseFloat(r.pcterr))}">${r.pcterr}%</td>
+        <td>${r.cumCalcCm}</td>
+        <td>${r.cumActualCm}</td>
+        <td class="${errClass(parseFloat(r.cumPcterr))}">${r.cumAbserr}</td>
+        <td class="${errClass(parseFloat(r.cumPcterr))}">${r.cumPcterr}%</td>
+      </tr>`).join('');
+  }
+
+  area.innerHTML = `
+    <div class="avg-row">
+      <div class="avg-card"><div class="al">H Avg Seg Abs Err</div><div class="av">${avgHabs.toFixed(2)} cm</div></div>
+      <div class="avg-card"><div class="al">H Avg Seg % Err</div><div class="av">${avgHpct.toFixed(2)}%</div></div>
+      <div class="avg-card"><div class="al">V Avg Seg Abs Err</div><div class="av">${avgVabs.toFixed(2)} cm</div></div>
+      <div class="avg-card"><div class="al">V Avg Seg % Err</div><div class="av">${avgVpct.toFixed(2)}%</div></div>
+      <div class="avg-card"><div class="al">H Max Cum Err</div><div class="av">${maxHcumErr.toFixed(2)} cm</div></div>
+      <div class="avg-card"><div class="al">V Max Cum Err</div><div class="av">${maxVcumErr.toFixed(2)} cm</div></div>
+    </div>
+    <table class="results-table">
+      <thead>
+        <tr>
+          <th>Axis</th><th>Segment</th><th>Pixel Dist</th>
+          <th>Seg Calc (cm)</th><th>Seg Actual (cm)</th>
+          <th>Seg Abs Err</th><th>Seg % Err</th>
+          <th>Cum Calc (cm)</th><th>Cum Actual (cm)</th>
+          <th>Cum Abs Err</th><th>Cum % Err</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHTML(rows)}</tbody>
+    </table>
+  `;
+}
+
+// ─── Export CSV ───────────────────────────────────────────────────────────────
+document.getElementById('btn-export').addEventListener('click', () => {
+  const name = document.getElementById('annotator-name').value.trim() || 'unknown';
+  const rows = getAllRows();
+  const header = 'annotator_name,axis,segment,pixel_distance,calculated_distance_cm,actual_distance_cm,absolute_error_cm,percentage_error,cumulative_calculated_cm,cumulative_actual_cm,cumulative_error_cm,cumulative_percentage_error\n';
+  const body = rows.map(r =>
+    `${name},${r.axis},${r.seg},${r.pxDist},${r.calcCm},${r.actualCm},${r.abserr},${r.pcterr},${r.cumCalcCm},${r.cumActualCm},${r.cumAbserr},${r.cumPcterr}`
+  ).join('\n');
+  const blob = new Blob([header + body], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `annotation_${name}_${Date.now()}.csv`;
+  a.click();
+});
+
+// ─── Undo ─────────────────────────────────────────────────────────────────────
+document.getElementById('btn-undo').addEventListener('click', () => {
+  if (state.phase === 'calib' && state.calibPts.length > 0) {
+    state.calibPts.pop();
+  } else if (state.phase === 'horiz' && state.horizPts.length > 0) {
+    state.horizPts.pop();
+  } else if (state.phase === 'vert' && state.vertPts.length > 0) {
+    state.vertPts.pop();
+  } else if (state.phase === 'done') {
+    if (state.vertPts.length > 0) state.vertPts.pop();
+    state.phase = 'vert';
+  }
+  drawAll(); updatePointList();
+  const msgs = {
+    calib: 'Calibration: click stump top first.',
+    horiz: `Horizontal: ${state.horizPts.length} points placed.`,
+    vert: `Vertical: ${state.vertPts.length} points placed.`,
+  };
+  if (msgs[state.phase]) setStatus(msgs[state.phase]);
+});
+
+// ─── Reset ────────────────────────────────────────────────────────────────────
+document.getElementById('btn-reset').addEventListener('click', () => {
+  if (!confirm('Reset all annotations? This cannot be undone.')) return;
+  state.calibPts = []; state.horizPts = []; state.vertPts = [];
+  state.pxPerMeter = null; state.cmPerPx = null;
+  document.getElementById('cal-px').textContent = '—';
+  document.getElementById('cal-ppm').textContent = '—';
+  document.getElementById('cal-cpp').textContent = '—';
+  document.getElementById('btn-export').classList.add('disabled');
+  document.getElementById('chart-area').innerHTML = '<div class="no-data" style="grid-column:1/-1;">Complete annotation to see error charts.</div>';
+  document.getElementById('results-area').innerHTML = '<div class="no-data">Complete annotation to see results.</div>';
+  setPhase('calib');
+  drawAll(); updatePointList();
+});
+</script>
+</body>
+</html>

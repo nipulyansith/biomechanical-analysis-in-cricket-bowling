@@ -1,0 +1,496 @@
+video_id,frame_number,joint_name,annotator_name,experience_level,deviation_px
+video,0,Head,Charitha Lakshan,novice,4.770919148027952
+video,0,Head,Diniru Banuka,novice,2.7246730062223143
+video,0,Head,Moushika Kriyanjalee,novice,1.9761864037749337
+video,0,Head,Nipul,novice,2.8042486091201306
+video,0,Head,Pasindi Vindula,novice,1.4124830652608296
+video,0,Head,Pinsarie Sigera,novice,4.1268700777430505
+video,0,Head,Santhush Fernando,novice,5.518938422485439
+video,0,Head,Venuri Abeysekara,novice,5.126421735030332
+video,0,Head,Vihanga Vithanawasam,novice,2.3481138596797786
+video,0,Left Ankle,Charitha Lakshan,novice,5.440601132591264
+video,0,Left Ankle,Diniru Banuka,novice,13.467951134048619
+video,0,Left Ankle,Moushika Kriyanjalee,novice,11.559434467996091
+video,0,Left Ankle,Nipul,novice,12.33413830464092
+video,0,Left Ankle,Pasindi Vindula,novice,20.989066009393166
+video,0,Left Ankle,Pinsarie Sigera,novice,9.471985088620974
+video,0,Left Ankle,Santhush Fernando,novice,10.180534577930553
+video,0,Left Ankle,Venuri Abeysekara,novice,11.945479600430843
+video,0,Left Ankle,Vihanga Vithanawasam,novice,13.113038224573978
+video,0,Left Elbow,Charitha Lakshan,novice,4.454693007511198
+video,0,Left Elbow,Diniru Banuka,novice,15.767848138382718
+video,0,Left Elbow,Moushika Kriyanjalee,novice,4.825417039128271
+video,0,Left Elbow,Nipul,novice,9.931616917852303
+video,0,Left Elbow,Pasindi Vindula,novice,9.68156308132125
+video,0,Left Elbow,Pinsarie Sigera,novice,4.454693007511198
+video,0,Left Elbow,Santhush Fernando,novice,13.496261146423633
+video,0,Left Elbow,Venuri Abeysekara,novice,15.072165211590873
+video,0,Left Elbow,Vihanga Vithanawasam,novice,9.058522109097227
+video,0,Left Knee,Charitha Lakshan,novice,4.742456553834303
+video,0,Left Knee,Diniru Banuka,novice,3.8850446644159833
+video,0,Left Knee,Moushika Kriyanjalee,novice,8.283856173060265
+video,0,Left Knee,Nipul,novice,2.1557249204008695
+video,0,Left Knee,Pasindi Vindula,novice,2.6248537651190733
+video,0,Left Knee,Pinsarie Sigera,novice,3.7078907697323666
+video,0,Left Knee,Santhush Fernando,novice,1.7863922994780452
+video,0,Left Knee,Venuri Abeysekara,novice,1.7863922994780452
+video,0,Left Knee,Vihanga Vithanawasam,novice,9.133285694642074
+video,0,Left Shoulder,Charitha Lakshan,novice,13.280721987884617
+video,0,Left Shoulder,Diniru Banuka,novice,7.020737467412041
+video,0,Left Shoulder,Moushika Kriyanjalee,novice,7.576278267882556
+video,0,Left Shoulder,Nipul,novice,2.610902366307387
+video,0,Left Shoulder,Pasindi Vindula,novice,7.020737467412041
+video,0,Left Shoulder,Pinsarie Sigera,novice,1.8214938113396204
+video,0,Left Shoulder,Santhush Fernando,novice,4.125566276774736
+video,0,Left Shoulder,Venuri Abeysekara,novice,3.66276886138806
+video,0,Left Shoulder,Vihanga Vithanawasam,novice,1.8214938113396204
+video,0,Left Wrist,Charitha Lakshan,novice,4.429735556678244
+video,0,Left Wrist,Diniru Banuka,novice,7.030349587925048
+video,0,Left Wrist,Moushika Kriyanjalee,novice,7.46132332272394
+video,0,Left Wrist,Nipul,novice,2.190777276094153
+video,0,Left Wrist,Pasindi Vindula,novice,9.126672679801066
+video,0,Left Wrist,Pinsarie Sigera,novice,4.3192905210644845
+video,0,Left Wrist,Santhush Fernando,novice,5.755332640649654
+video,0,Left Wrist,Venuri Abeysekara,novice,3.0440111633326405
+video,0,Left Wrist,Vihanga Vithanawasam,novice,4.429735556678244
+video,0,Right Ankle,Charitha Lakshan,novice,12.370142200710516
+video,0,Right Ankle,Diniru Banuka,novice,11.591835922583371
+video,0,Right Ankle,Moushika Kriyanjalee,novice,17.409384601184268
+video,0,Right Ankle,Nipul,novice,5.37918408748349
+video,0,Right Ankle,Pasindi Vindula,novice,19.777874929423238
+video,0,Right Ankle,Pinsarie Sigera,novice,3.112162423178296
+video,0,Right Ankle,Santhush Fernando,novice,7.42504984491133
+video,0,Right Ankle,Venuri Abeysekara,novice,11.35014326899899
+video,0,Right Ankle,Vihanga Vithanawasam,novice,25.55818994561437
+video,0,Right Elbow,Charitha Lakshan,novice,3.0207537564474665
+video,0,Right Elbow,Diniru Banuka,novice,7.826085333338985
+video,0,Right Elbow,Moushika Kriyanjalee,novice,3.0207537564474665
+video,0,Right Elbow,Nipul,novice,6.462083664205741
+video,0,Right Elbow,Pasindi Vindula,novice,12.852487714292844
+video,0,Right Elbow,Pinsarie Sigera,novice,7.826085333338985
+video,0,Right Elbow,Santhush Fernando,novice,8.652826329832749
+video,0,Right Elbow,Venuri Abeysekara,novice,6.342328218180724
+video,0,Right Elbow,Vihanga Vithanawasam,novice,6.701886095088809
+video,0,Right Knee,Charitha Lakshan,novice,9.199959670863876
+video,0,Right Knee,Diniru Banuka,novice,9.170162769535992
+video,0,Right Knee,Moushika Kriyanjalee,novice,8.775899606989165
+video,0,Right Knee,Nipul,novice,6.128099702936098
+video,0,Right Knee,Pasindi Vindula,novice,14.881119090801906
+video,0,Right Knee,Pinsarie Sigera,novice,5.778431203806729
+video,0,Right Knee,Santhush Fernando,novice,4.071972079619553
+video,0,Right Knee,Venuri Abeysekara,novice,23.966327606091383
+video,0,Right Knee,Vihanga Vithanawasam,novice,9.252286405875873
+video,0,Right Shoulder,Charitha Lakshan,novice,8.233156964343076
+video,0,Right Shoulder,Diniru Banuka,novice,8.633423528559344
+video,0,Right Shoulder,Moushika Kriyanjalee,novice,14.065391564716647
+video,0,Right Shoulder,Nipul,novice,5.308442889428296
+video,0,Right Shoulder,Pasindi Vindula,novice,10.20498266431521
+video,0,Right Shoulder,Pinsarie Sigera,novice,4.011645046711886
+video,0,Right Shoulder,Santhush Fernando,novice,8.75336317796432
+video,0,Right Shoulder,Venuri Abeysekara,novice,1.8215031327969071
+video,0,Right Shoulder,Vihanga Vithanawasam,novice,1.1101840212007164
+video,0,Right Wrist,Charitha Lakshan,novice,3.12627796152258
+video,0,Right Wrist,Diniru Banuka,novice,4.076489515260144
+video,0,Right Wrist,Moushika Kriyanjalee,novice,6.548091331952982
+video,0,Right Wrist,Nipul,novice,2.1347687416949768
+video,0,Right Wrist,Pasindi Vindula,novice,9.13837012660721
+video,0,Right Wrist,Pinsarie Sigera,novice,8.958345249181669
+video,0,Right Wrist,Santhush Fernando,novice,11.856386297545608
+video,0,Right Wrist,Venuri Abeysekara,novice,4.076489515260144
+video,0,Right Wrist,Vihanga Vithanawasam,novice,3.8648111213670506
+video,30,Head,Charitha Lakshan,novice,3.9024003220825927
+video,30,Head,Diniru Banuka,novice,0.6640211419419279
+video,30,Head,Moushika Kriyanjalee,novice,5.6096961851105815
+video,30,Head,Nipul,novice,2.8226354217583314
+video,30,Head,Pasindi Vindula,novice,3.2165617129793356
+video,30,Head,Pinsarie Sigera,novice,0.6640211419419279
+video,30,Head,Santhush Fernando,novice,2.7352753832522505
+video,30,Head,Venuri Abeysekara,novice,3.2165617129793356
+video,30,Head,Vihanga Vithanawasam,novice,0.6640211419419279
+video,30,Left Ankle,Charitha Lakshan,novice,3.1207867344043123
+video,30,Left Ankle,Diniru Banuka,novice,15.548684733703896
+video,30,Left Ankle,Moushika Kriyanjalee,novice,19.964264656329473
+video,30,Left Ankle,Nipul,novice,3.9844038435782467
+video,30,Left Ankle,Pasindi Vindula,novice,5.6578972891760895
+video,30,Left Ankle,Pinsarie Sigera,novice,7.727427065442367
+video,30,Left Ankle,Santhush Fernando,novice,19.84116549453223
+video,30,Left Ankle,Venuri Abeysekara,novice,6.23476172207706
+video,30,Left Ankle,Vihanga Vithanawasam,novice,17.254605587401507
+video,30,Left Elbow,Charitha Lakshan,novice,2.4653045228506154
+video,30,Left Elbow,Diniru Banuka,novice,13.78458412627171
+video,30,Left Elbow,Moushika Kriyanjalee,novice,4.720391195395391
+video,30,Left Elbow,Nipul,novice,9.231304391459618
+video,30,Left Elbow,Pasindi Vindula,novice,8.00961534150363
+video,30,Left Elbow,Pinsarie Sigera,novice,4.320094449886653
+video,30,Left Elbow,Santhush Fernando,novice,4.720391195395391
+video,30,Left Elbow,Venuri Abeysekara,novice,23.585229788306478
+video,30,Left Elbow,Vihanga Vithanawasam,novice,2.611420055103324
+video,30,Left Knee,Charitha Lakshan,novice,4.791074985891759
+video,30,Left Knee,Diniru Banuka,novice,14.959664947860349
+video,30,Left Knee,Moushika Kriyanjalee,novice,10.669104547032939
+video,30,Left Knee,Nipul,novice,11.835392630163545
+video,30,Left Knee,Pasindi Vindula,novice,10.98067786077379
+video,30,Left Knee,Pinsarie Sigera,novice,6.237818226699785
+video,30,Left Knee,Santhush Fernando,novice,6.032720928428295
+video,30,Left Knee,Venuri Abeysekara,novice,5.796207015587498
+video,30,Left Knee,Vihanga Vithanawasam,novice,20.849349363955117
+video,30,Left Shoulder,Charitha Lakshan,novice,10.672587976491597
+video,30,Left Shoulder,Diniru Banuka,novice,9.227125839059685
+video,30,Left Shoulder,Moushika Kriyanjalee,novice,4.781691208281497
+video,30,Left Shoulder,Nipul,novice,2.7512531096853454
+video,30,Left Shoulder,Pasindi Vindula,novice,4.781691208281497
+video,30,Left Shoulder,Pinsarie Sigera,novice,1.7315052390691552
+video,30,Left Shoulder,Santhush Fernando,novice,5.759396979459317
+video,30,Left Shoulder,Venuri Abeysekara,novice,5.759396979459317
+video,30,Left Shoulder,Vihanga Vithanawasam,novice,5.759396979459317
+video,30,Left Wrist,Charitha Lakshan,novice,12.291302544177862
+video,30,Left Wrist,Diniru Banuka,novice,12.486271108302986
+video,30,Left Wrist,Moushika Kriyanjalee,novice,3.5338727906421536
+video,30,Left Wrist,Nipul,novice,2.023165268097255
+video,30,Left Wrist,Pasindi Vindula,novice,2.9868944770439283
+video,30,Left Wrist,Pinsarie Sigera,novice,0.8439870297839582
+video,30,Left Wrist,Santhush Fernando,novice,7.889925634756998
+video,30,Left Wrist,Venuri Abeysekara,novice,3.073962354499214
+video,30,Left Wrist,Vihanga Vithanawasam,novice,4.722390586904789
+video,30,Right Ankle,Charitha Lakshan,novice,11.957683542721178
+video,30,Right Ankle,Diniru Banuka,novice,6.4440072950005485
+video,30,Right Ankle,Moushika Kriyanjalee,novice,9.095361159295155
+video,30,Right Ankle,Nipul,novice,3.4318206365742046
+video,30,Right Ankle,Pasindi Vindula,novice,8.71470365029121
+video,30,Right Ankle,Pinsarie Sigera,novice,5.841279997527674
+video,30,Right Ankle,Santhush Fernando,novice,10.571623297193625
+video,30,Right Ankle,Venuri Abeysekara,novice,9.314534212912518
+video,30,Right Ankle,Vihanga Vithanawasam,novice,9.188606255783835
+video,30,Right Elbow,Charitha Lakshan,novice,6.431437317406485
+video,30,Right Elbow,Diniru Banuka,novice,0.6144146212487479
+video,30,Right Elbow,Moushika Kriyanjalee,novice,8.123720100942478
+video,30,Right Elbow,Nipul,novice,3.6721969567394868
+video,30,Right Elbow,Pasindi Vindula,novice,2.89604796725534
+video,30,Right Elbow,Pinsarie Sigera,novice,2.89604796725534
+video,30,Right Elbow,Santhush Fernando,novice,5.7743257001549635
+video,30,Right Elbow,Venuri Abeysekara,novice,12.829630952421972
+video,30,Right Elbow,Vihanga Vithanawasam,novice,4.618867376916599
+video,30,Right Knee,Charitha Lakshan,novice,3.4338703355844884
+video,30,Right Knee,Diniru Banuka,novice,16.604552227891627
+video,30,Right Knee,Moushika Kriyanjalee,novice,11.435023170807588
+video,30,Right Knee,Nipul,novice,6.372185476779178
+video,30,Right Knee,Pasindi Vindula,novice,7.53614505023367
+video,30,Right Knee,Pinsarie Sigera,novice,9.899821652326503
+video,30,Right Knee,Santhush Fernando,novice,3.4338703355844884
+video,30,Right Knee,Venuri Abeysekara,novice,6.109501638186003
+video,30,Right Knee,Vihanga Vithanawasam,novice,4.032154216606952
+video,30,Right Shoulder,Charitha Lakshan,novice,11.210786964641342
+video,30,Right Shoulder,Diniru Banuka,novice,3.361950124129843
+video,30,Right Shoulder,Moushika Kriyanjalee,novice,0.715551450402424
+video,30,Right Shoulder,Nipul,novice,1.0996973691660274
+video,30,Right Shoulder,Pasindi Vindula,novice,8.51708053069563
+video,30,Right Shoulder,Pinsarie Sigera,novice,8.65034309960307
+video,30,Right Shoulder,Santhush Fernando,novice,6.457837516637952
+video,30,Right Shoulder,Venuri Abeysekara,novice,5.242262788835368
+video,30,Right Shoulder,Vihanga Vithanawasam,novice,6.248164399012489
+video,30,Right Wrist,Charitha Lakshan,novice,2.655550596915684
+video,30,Right Wrist,Diniru Banuka,novice,6.091826922701259
+video,30,Right Wrist,Moushika Kriyanjalee,novice,6.427570741521306
+video,30,Right Wrist,Nipul,novice,1.3032552650191096
+video,30,Right Wrist,Pasindi Vindula,novice,4.109344909139762
+video,30,Right Wrist,Pinsarie Sigera,novice,5.594121635801091
+video,30,Right Wrist,Santhush Fernando,novice,8.470169659412164
+video,30,Right Wrist,Venuri Abeysekara,novice,3.155951809146835
+video,30,Right Wrist,Vihanga Vithanawasam,novice,4.4698434628944295
+video,60,Head,Charitha Lakshan,novice,1.8254523961924636
+video,60,Head,Diniru Banuka,novice,2.617404580712819
+video,60,Head,Moushika Kriyanjalee,novice,2.4335641437508655
+video,60,Head,Nipul,novice,2.524920148037236
+video,60,Head,Pasindi Vindula,novice,2.4335641437508655
+video,60,Head,Pinsarie Sigera,novice,1.5503883879138944
+video,60,Head,Santhush Fernando,novice,2.617404580712819
+video,60,Head,Venuri Abeysekara,novice,3.9788602420785506
+video,60,Head,Vihanga Vithanawasam,novice,1.5503883879138944
+video,60,Left Ankle,Charitha Lakshan,novice,8.680208604758135
+video,60,Left Ankle,Diniru Banuka,novice,1.7910600044966063
+video,60,Left Ankle,Moushika Kriyanjalee,novice,3.2377519393736143
+video,60,Left Ankle,Nipul,novice,3.701061849257036
+video,60,Left Ankle,Pasindi Vindula,novice,13.123689367948105
+video,60,Left Ankle,Pinsarie Sigera,novice,5.59337777055153
+video,60,Left Ankle,Santhush Fernando,novice,4.699190574108692
+video,60,Left Ankle,Venuri Abeysekara,novice,7.578621922100605
+video,60,Left Ankle,Vihanga Vithanawasam,novice,9.50598943992713
+video,60,Left Elbow,Charitha Lakshan,novice,5.051445302487006
+video,60,Left Elbow,Diniru Banuka,novice,12.79543816860359
+video,60,Left Elbow,Moushika Kriyanjalee,novice,3.688610378035466
+video,60,Left Elbow,Nipul,novice,2.944919858588431
+video,60,Left Elbow,Pasindi Vindula,novice,8.537745266065148
+video,60,Left Elbow,Pinsarie Sigera,novice,3.468920947866807
+video,60,Left Elbow,Santhush Fernando,novice,3.184867899918989
+video,60,Left Elbow,Venuri Abeysekara,novice,2.839541307123201
+video,60,Left Elbow,Vihanga Vithanawasam,novice,7.57159302002664
+video,60,Left Knee,Charitha Lakshan,novice,7.589992478067778
+video,60,Left Knee,Diniru Banuka,novice,7.64655089061021
+video,60,Left Knee,Moushika Kriyanjalee,novice,4.405387232263072
+video,60,Left Knee,Nipul,novice,1.3051877234320564
+video,60,Left Knee,Pasindi Vindula,novice,1.799112368641664
+video,60,Left Knee,Pinsarie Sigera,novice,10.200587256396258
+video,60,Left Knee,Santhush Fernando,novice,2.3218373302956477
+video,60,Left Knee,Venuri Abeysekara,novice,4.415162285234865
+video,60,Left Knee,Vihanga Vithanawasam,novice,10.213258265199736
+video,60,Left Shoulder,Charitha Lakshan,novice,10.34393408465525
+video,60,Left Shoulder,Diniru Banuka,novice,10.477023181659263
+video,60,Left Shoulder,Moushika Kriyanjalee,novice,1.7463561806481958
+video,60,Left Shoulder,Nipul,novice,2.4168417030816793
+video,60,Left Shoulder,Pasindi Vindula,novice,3.2189123824941097
+video,60,Left Shoulder,Pinsarie Sigera,novice,3.0534218042903074
+video,60,Left Shoulder,Santhush Fernando,novice,5.850094960833265
+video,60,Left Shoulder,Venuri Abeysekara,novice,4.078605066950218
+video,60,Left Shoulder,Vihanga Vithanawasam,novice,8.138869344098149
+video,60,Left Wrist,Charitha Lakshan,novice,6.20069222696294
+video,60,Left Wrist,Diniru Banuka,novice,2.3888627519481624
+video,60,Left Wrist,Moushika Kriyanjalee,novice,6.379130379662264
+video,60,Left Wrist,Nipul,novice,1.4434489785818758
+video,60,Left Wrist,Pasindi Vindula,novice,2.3888627519481624
+video,60,Left Wrist,Pinsarie Sigera,novice,7.155775735422259
+video,60,Left Wrist,Santhush Fernando,novice,5.86268647169549
+video,60,Left Wrist,Venuri Abeysekara,novice,4.303401786438917
+video,60,Left Wrist,Vihanga Vithanawasam,novice,3.48439317449337
+video,60,Right Ankle,Charitha Lakshan,novice,7.082259970615251
+video,60,Right Ankle,Diniru Banuka,novice,18.50672181917967
+video,60,Right Ankle,Moushika Kriyanjalee,novice,19.987082875540946
+video,60,Right Ankle,Nipul,novice,2.367510997716753
+video,60,Right Ankle,Pasindi Vindula,novice,14.288799300366385
+video,60,Right Ankle,Pinsarie Sigera,novice,14.833245461931366
+video,60,Right Ankle,Santhush Fernando,novice,11.761566677067638
+video,60,Right Ankle,Venuri Abeysekara,novice,14.833245461931366
+video,60,Right Ankle,Vihanga Vithanawasam,novice,23.397692408388572
+video,60,Right Elbow,Charitha Lakshan,novice,5.793456952654232
+video,60,Right Elbow,Diniru Banuka,novice,14.456309958107965
+video,60,Right Elbow,Moushika Kriyanjalee,novice,4.748062029267005
+video,60,Right Elbow,Nipul,novice,6.7612693732679
+video,60,Right Elbow,Pasindi Vindula,novice,3.118704189973313
+video,60,Right Elbow,Pinsarie Sigera,novice,8.699403987993021
+video,60,Right Elbow,Santhush Fernando,novice,11.78431516796201
+video,60,Right Elbow,Venuri Abeysekara,novice,19.3111441960431
+video,60,Right Elbow,Vihanga Vithanawasam,novice,5.75307920742467
+video,60,Right Knee,Charitha Lakshan,novice,9.30966488554294
+video,60,Right Knee,Diniru Banuka,novice,8.514686326980215
+video,60,Right Knee,Moushika Kriyanjalee,novice,7.162250444377695
+video,60,Right Knee,Nipul,novice,1.7456449969767145
+video,60,Right Knee,Pasindi Vindula,novice,2.0908838836425985
+video,60,Right Knee,Pinsarie Sigera,novice,13.979691124222455
+video,60,Right Knee,Santhush Fernando,novice,6.042026598838254
+video,60,Right Knee,Venuri Abeysekara,novice,12.078483267418072
+video,60,Right Knee,Vihanga Vithanawasam,novice,3.049979904390134
+video,60,Right Shoulder,Charitha Lakshan,novice,6.548973637137222
+video,60,Right Shoulder,Diniru Banuka,novice,5.515362032508004
+video,60,Right Shoulder,Moushika Kriyanjalee,novice,6.57109770293009
+video,60,Right Shoulder,Nipul,novice,6.4177883351805916
+video,60,Right Shoulder,Pasindi Vindula,novice,6.567737520740855
+video,60,Right Shoulder,Pinsarie Sigera,novice,8.004087554941517
+video,60,Right Shoulder,Santhush Fernando,novice,8.637675677710908
+video,60,Right Shoulder,Venuri Abeysekara,novice,6.548973637137222
+video,60,Right Shoulder,Vihanga Vithanawasam,novice,4.4532059804288116
+video,60,Right Wrist,Charitha Lakshan,novice,13.067209174802798
+video,60,Right Wrist,Diniru Banuka,novice,4.408077046822536
+video,60,Right Wrist,Moushika Kriyanjalee,novice,3.008979644193283
+video,60,Right Wrist,Nipul,novice,2.7682565617191375
+video,60,Right Wrist,Pasindi Vindula,novice,3.0418829509404683
+video,60,Right Wrist,Pinsarie Sigera,novice,5.367761498172797
+video,60,Right Wrist,Santhush Fernando,novice,3.502127604133407
+video,60,Right Wrist,Venuri Abeysekara,novice,14.262687690757582
+video,60,Right Wrist,Vihanga Vithanawasam,novice,5.367761498172797
+video,90,Head,Charitha Lakshan,novice,1.3444908291236446
+video,90,Head,Diniru Banuka,novice,3.6460978626809135
+video,90,Head,Moushika Kriyanjalee,novice,5.1960856353445415
+video,90,Head,Nipul,novice,1.6354914811231214
+video,90,Head,Pasindi Vindula,novice,1.3444908291236446
+video,90,Head,Pinsarie Sigera,novice,1.3444908291236446
+video,90,Head,Santhush Fernando,novice,2.8628672364121575
+video,90,Head,Venuri Abeysekara,novice,4.221994293452876
+video,90,Head,Vihanga Vithanawasam,novice,1.6541547348975996
+video,90,Left Ankle,Charitha Lakshan,novice,8.90095279984608
+video,90,Left Ankle,Diniru Banuka,novice,10.24185809572796
+video,90,Left Ankle,Moushika Kriyanjalee,novice,8.90095279984608
+video,90,Left Ankle,Nipul,novice,4.702259262025216
+video,90,Left Ankle,Pasindi Vindula,novice,12.656664758554149
+video,90,Left Ankle,Pinsarie Sigera,novice,5.11734600476198
+video,90,Left Ankle,Santhush Fernando,novice,7.644979267080692
+video,90,Left Ankle,Venuri Abeysekara,novice,3.764278715740383
+video,90,Left Ankle,Vihanga Vithanawasam,novice,26.30723042481185
+video,90,Left Elbow,Charitha Lakshan,novice,1.1125704563129797
+video,90,Left Elbow,Diniru Banuka,novice,13.742707886215065
+video,90,Left Elbow,Moushika Kriyanjalee,novice,1.8340220199490582
+video,90,Left Elbow,Nipul,novice,3.135016952330186
+video,90,Left Elbow,Pasindi Vindula,novice,5.0814818520377925
+video,90,Left Elbow,Pinsarie Sigera,novice,6.1408951060474
+video,90,Left Elbow,Santhush Fernando,novice,3.3167946274979547
+video,90,Left Elbow,Venuri Abeysekara,novice,10.31021751073805
+video,90,Left Elbow,Vihanga Vithanawasam,novice,11.946960625510943
+video,90,Left Knee,Charitha Lakshan,novice,0.49020851305651253
+video,90,Left Knee,Diniru Banuka,novice,9.188627497367358
+video,90,Left Knee,Moushika Kriyanjalee,novice,4.5721053008276495
+video,90,Left Knee,Nipul,novice,9.569770288351275
+video,90,Left Knee,Pasindi Vindula,novice,3.6699822034193468
+video,90,Left Knee,Pinsarie Sigera,novice,11.836516366285258
+video,90,Left Knee,Santhush Fernando,novice,6.565302552964267
+video,90,Left Knee,Venuri Abeysekara,novice,6.196006061422242
+video,90,Left Knee,Vihanga Vithanawasam,novice,8.560246491739411
+video,90,Left Shoulder,Charitha Lakshan,novice,10.104131872004043
+video,90,Left Shoulder,Diniru Banuka,novice,2.0982567421355176
+video,90,Left Shoulder,Moushika Kriyanjalee,novice,5.9433709854665615
+video,90,Left Shoulder,Nipul,novice,4.94459014462313
+video,90,Left Shoulder,Pasindi Vindula,novice,0.9002740012747545
+video,90,Left Shoulder,Pinsarie Sigera,novice,3.8451681459464777
+video,90,Left Shoulder,Santhush Fernando,novice,2.715513123458201
+video,90,Left Shoulder,Venuri Abeysekara,novice,2.0982567421355176
+video,90,Left Shoulder,Vihanga Vithanawasam,novice,9.770877216405447
+video,90,Left Wrist,Charitha Lakshan,novice,7.603637793300944
+video,90,Left Wrist,Diniru Banuka,novice,4.126243516644444
+video,90,Left Wrist,Moushika Kriyanjalee,novice,4.302676675739054
+video,90,Left Wrist,Nipul,novice,5.76021677005987
+video,90,Left Wrist,Pasindi Vindula,novice,4.987137803629354
+video,90,Left Wrist,Pinsarie Sigera,novice,7.097859015592069
+video,90,Left Wrist,Santhush Fernando,novice,4.932843573284113
+video,90,Left Wrist,Venuri Abeysekara,novice,1.5860074895341507
+video,90,Left Wrist,Vihanga Vithanawasam,novice,1.5860074895341507
+video,90,Right Ankle,Charitha Lakshan,novice,11.703546041327112
+video,90,Right Ankle,Diniru Banuka,novice,9.115588782128533
+video,90,Right Ankle,Moushika Kriyanjalee,novice,3.5705022748605346
+video,90,Right Ankle,Nipul,novice,7.279265253761168
+video,90,Right Ankle,Pasindi Vindula,novice,10.28510678458437
+video,90,Right Ankle,Pinsarie Sigera,novice,1.2143706170410904
+video,90,Right Ankle,Santhush Fernando,novice,2.9440348375717704
+video,90,Right Ankle,Venuri Abeysekara,novice,3.5705022748605346
+video,90,Right Ankle,Vihanga Vithanawasam,novice,26.034405621189954
+video,90,Right Elbow,Charitha Lakshan,novice,2.7062191298894227
+video,90,Right Elbow,Diniru Banuka,novice,6.799920905262882
+video,90,Right Elbow,Moushika Kriyanjalee,novice,3.8087348188051786
+video,90,Right Elbow,Nipul,novice,1.6544548939191532
+video,90,Right Elbow,Pasindi Vindula,novice,3.8087348188051786
+video,90,Right Elbow,Pinsarie Sigera,novice,6.6074540995827675
+video,90,Right Elbow,Santhush Fernando,novice,6.803301101177446
+video,90,Right Elbow,Venuri Abeysekara,novice,2.7062191298894227
+video,90,Right Elbow,Vihanga Vithanawasam,novice,6.219440590271315
+video,90,Right Knee,Charitha Lakshan,novice,2.324511050467367
+video,90,Right Knee,Diniru Banuka,novice,2.324511050467367
+video,90,Right Knee,Moushika Kriyanjalee,novice,10.15988088094714
+video,90,Right Knee,Nipul,novice,5.1693155258251595
+video,90,Right Knee,Pasindi Vindula,novice,1.7998574961267584
+video,90,Right Knee,Pinsarie Sigera,novice,11.068909917966437
+video,90,Right Knee,Santhush Fernando,novice,8.303855729366585
+video,90,Right Knee,Venuri Abeysekara,novice,8.675139405702874
+video,90,Right Knee,Vihanga Vithanawasam,novice,1.9503587940291167
+video,90,Right Shoulder,Charitha Lakshan,novice,16.197057125126047
+video,90,Right Shoulder,Diniru Banuka,novice,1.41354168572935
+video,90,Right Shoulder,Moushika Kriyanjalee,novice,7.328454100668084
+video,90,Right Shoulder,Nipul,novice,7.027622692900056
+video,90,Right Shoulder,Pasindi Vindula,novice,1.41354168572935
+video,90,Right Shoulder,Pinsarie Sigera,novice,7.328454100668084
+video,90,Right Shoulder,Santhush Fernando,novice,7.328454100668084
+video,90,Right Shoulder,Venuri Abeysekara,novice,13.478539949172342
+video,90,Right Shoulder,Vihanga Vithanawasam,novice,7.328454100668084
+video,90,Right Wrist,Charitha Lakshan,novice,1.7279307069005525
+video,90,Right Wrist,Diniru Banuka,novice,5.7122169138976115
+video,90,Right Wrist,Moushika Kriyanjalee,novice,1.7279307069005525
+video,90,Right Wrist,Nipul,novice,4.565770377546616
+video,90,Right Wrist,Pasindi Vindula,novice,5.420231352947695
+video,90,Right Wrist,Pinsarie Sigera,novice,5.132985375259056
+video,90,Right Wrist,Santhush Fernando,novice,5.420231352947695
+video,90,Right Wrist,Venuri Abeysekara,novice,2.8840733666679084
+video,90,Right Wrist,Vihanga Vithanawasam,novice,4.805936403104251
+video,120,Head,Charitha Lakshan,novice,0.6692291587843777
+video,120,Head,Diniru Banuka,novice,3.358608033801997
+video,120,Head,Moushika Kriyanjalee,novice,2.4125647749690375
+video,120,Head,Nipul,novice,3.51180827126029
+video,120,Head,Pasindi Vindula,novice,0.6692291587843777
+video,120,Head,Pinsarie Sigera,novice,0.6692291587843777
+video,120,Head,Santhush Fernando,novice,5.915586686300165
+video,120,Head,Venuri Abeysekara,novice,3.358608033801997
+video,120,Head,Vihanga Vithanawasam,novice,3.467192163913022
+video,120,Left Ankle,Charitha Lakshan,novice,11.290538965730567
+video,120,Left Ankle,Diniru Banuka,novice,8.012832301337948
+video,120,Left Ankle,Moushika Kriyanjalee,novice,10.861178995661442
+video,120,Left Ankle,Nipul,novice,6.1647695862294185
+video,120,Left Ankle,Pasindi Vindula,novice,10.698023747814602
+video,120,Left Ankle,Pinsarie Sigera,novice,7.312693732830545
+video,120,Left Ankle,Santhush Fernando,novice,10.403438701254526
+video,120,Left Ankle,Venuri Abeysekara,novice,9.898143624229993
+video,120,Left Ankle,Vihanga Vithanawasam,novice,28.10685378577442
+video,120,Left Elbow,Charitha Lakshan,novice,314.13485607309116
+video,120,Left Elbow,Diniru Banuka,novice,50.36578516904439
+video,120,Left Elbow,Moushika Kriyanjalee,novice,35.689874033307
+video,120,Left Elbow,Nipul,novice,41.803287311702555
+video,120,Left Elbow,Pasindi Vindula,novice,54.82896867573884
+video,120,Left Elbow,Pinsarie Sigera,novice,35.53127088516426
+video,120,Left Elbow,Santhush Fernando,novice,38.515296235631965
+video,120,Left Elbow,Venuri Abeysekara,novice,32.707201679737466
+video,120,Left Elbow,Vihanga Vithanawasam,novice,27.52755624022403
+video,120,Left Knee,Charitha Lakshan,novice,6.4056665934222625
+video,120,Left Knee,Diniru Banuka,novice,5.119047914889188
+video,120,Left Knee,Moushika Kriyanjalee,novice,2.2129676501177444
+video,120,Left Knee,Nipul,novice,7.824112857418467
+video,120,Left Knee,Pasindi Vindula,novice,3.6222699008357453
+video,120,Left Knee,Pinsarie Sigera,novice,3.4998264614501235
+video,120,Left Knee,Santhush Fernando,novice,6.691047050786355
+video,120,Left Knee,Venuri Abeysekara,novice,6.045369899501918
+video,120,Left Knee,Vihanga Vithanawasam,novice,3.6222699008357453
+video,120,Left Shoulder,Charitha Lakshan,novice,14.344874967999258
+video,120,Left Shoulder,Diniru Banuka,novice,6.189880938817315
+video,120,Left Shoulder,Moushika Kriyanjalee,novice,2.3476947807825628
+video,120,Left Shoulder,Nipul,novice,19.447814870838055
+video,120,Left Shoulder,Pasindi Vindula,novice,12.495411000733982
+video,120,Left Shoulder,Pinsarie Sigera,novice,15.144245404049508
+video,120,Left Shoulder,Santhush Fernando,novice,5.442273719916372
+video,120,Left Shoulder,Venuri Abeysekara,novice,12.25006656345898
+video,120,Left Shoulder,Vihanga Vithanawasam,novice,7.230468790242619
+video,120,Left Wrist,Charitha Lakshan,novice,4.122837986908397
+video,120,Left Wrist,Diniru Banuka,novice,1.4295070103611192
+video,120,Left Wrist,Moushika Kriyanjalee,novice,4.122837986908397
+video,120,Left Wrist,Nipul,novice,3.7398420223148348
+video,120,Left Wrist,Pasindi Vindula,novice,2.390128577605643
+video,120,Left Wrist,Pinsarie Sigera,novice,2.390128577605643
+video,120,Left Wrist,Santhush Fernando,novice,2.390128577605643
+video,120,Left Wrist,Venuri Abeysekara,novice,3.9141309289346427
+video,120,Left Wrist,Vihanga Vithanawasam,novice,2.7184714004269557
+video,120,Right Ankle,Charitha Lakshan,novice,11.557644703434173
+video,120,Right Ankle,Diniru Banuka,novice,7.7885697240582745
+video,120,Right Ankle,Moushika Kriyanjalee,novice,11.044411723648933
+video,120,Right Ankle,Nipul,novice,13.872499995548885
+video,120,Right Ankle,Pasindi Vindula,novice,17.903932750322703
+video,120,Right Ankle,Pinsarie Sigera,novice,23.68304052076235
+video,120,Right Ankle,Santhush Fernando,novice,10.001874285287897
+video,120,Right Ankle,Venuri Abeysekara,novice,2.4546529075097343
+video,120,Right Ankle,Vihanga Vithanawasam,novice,31.058685109896707
+video,120,Right Elbow,Charitha Lakshan,novice,318.2138189899946
+video,120,Right Elbow,Diniru Banuka,novice,43.309323421286805
+video,120,Right Elbow,Moushika Kriyanjalee,novice,37.80295602946481
+video,120,Right Elbow,Nipul,novice,40.28863164481909
+video,120,Right Elbow,Pasindi Vindula,novice,40.16685959913881
+video,120,Right Elbow,Pinsarie Sigera,novice,40.29391712395484
+video,120,Right Elbow,Santhush Fernando,novice,37.80295602946481
+video,120,Right Elbow,Venuri Abeysekara,novice,43.309323421286805
+video,120,Right Elbow,Vihanga Vithanawasam,novice,37.39696086870479
+video,120,Right Knee,Charitha Lakshan,novice,2.085221089171015
+video,120,Right Knee,Diniru Banuka,novice,18.133479379543576
+video,120,Right Knee,Moushika Kriyanjalee,novice,3.607728508544863
+video,120,Right Knee,Nipul,novice,6.671962381974447
+video,120,Right Knee,Pasindi Vindula,novice,9.52919715982837
+video,120,Right Knee,Pinsarie Sigera,novice,5.913078556028339
+video,120,Right Knee,Santhush Fernando,novice,3.0579057355283434
+video,120,Right Knee,Venuri Abeysekara,novice,9.558525343413773
+video,120,Right Knee,Vihanga Vithanawasam,novice,8.945523356361868
+video,120,Right Shoulder,Charitha Lakshan,novice,19.586462870853058
+video,120,Right Shoulder,Diniru Banuka,novice,8.136532037021631
+video,120,Right Shoulder,Moushika Kriyanjalee,novice,12.305135052623456
+video,120,Right Shoulder,Nipul,novice,9.922540029464486
+video,120,Right Shoulder,Pasindi Vindula,novice,15.613985467708961
+video,120,Right Shoulder,Pinsarie Sigera,novice,11.66447833034704
+video,120,Right Shoulder,Santhush Fernando,novice,13.447474016128986
+video,120,Right Shoulder,Venuri Abeysekara,novice,23.642322263094808
+video,120,Right Shoulder,Vihanga Vithanawasam,novice,4.462647166812645
+video,120,Right Wrist,Charitha Lakshan,novice,3.535857924512143
+video,120,Right Wrist,Diniru Banuka,novice,5.225874039161451
+video,120,Right Wrist,Moushika Kriyanjalee,novice,3.9925960048762703
+video,120,Right Wrist,Nipul,novice,3.8732827956345104
+video,120,Right Wrist,Pasindi Vindula,novice,5.808861412704881
+video,120,Right Wrist,Pinsarie Sigera,novice,10.56392778889866
+video,120,Right Wrist,Santhush Fernando,novice,3.4439647521535703
+video,120,Right Wrist,Venuri Abeysekara,novice,3.535857924512143
+video,120,Right Wrist,Vihanga Vithanawasam,novice,9.370451568050676
