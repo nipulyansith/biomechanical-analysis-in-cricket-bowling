@@ -1,0 +1,214 @@
+<html class="dark" lang="en"><head></head><body class="bg-surface text-on-surface font-body selection:bg-tertiary selection:text-on-tertiary">
+
+
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sign Up |  PitchIQ</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&amp;family=Manrope:wght@200..800&amp;family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-background": "#dee3e7",
+                        "primary-fixed": "#bfe8ff",
+                        "inverse-on-surface": "#2b3135",
+                        "surface": "#0e1417",
+                        "tertiary-container": "#222d00",
+                        "secondary-container": "#006a3d",
+                        "inverse-surface": "#dee3e7",
+                        "on-tertiary-fixed": "#161e00",
+                        "background": "#0e1417",
+                        "tertiary-fixed": "#c3f400",
+                        "on-surface-variant": "#c2c7cc",
+                        "on-primary-fixed": "#001f2b",
+                        "tertiary": "#abd600",
+                        "tertiary-fixed-dim": "#abd600",
+                        "surface-container-highest": "#303639",
+                        "on-tertiary-fixed-variant": "#3c4d00",
+                        "outline-variant": "#42484c",
+                        "outline": "#8c9196",
+                        "surface-tint": "#96ceeb",
+                        "surface-container": "#1a2024",
+                        "on-error-container": "#ffdad6",
+                        "secondary-fixed-dim": "#81d9a1",
+                        "on-tertiary-container": "#7c9c00",
+                        "surface-container-high": "#252b2e",
+                        "surface-variant": "#303639",
+                        "on-primary": "#003547",
+                        "surface-dim": "#0e1417",
+                        "secondary": "#81d9a1",
+                        "surface-bright": "#343a3d",
+                        "surface-container-low": "#161c20",
+                        "error-container": "#93000a",
+                        "on-secondary-fixed-variant": "#00522e",
+                        "primary-fixed-dim": "#96ceeb",
+                        "on-secondary-container": "#8fe7af",
+                        "on-secondary-fixed": "#002110",
+                        "on-primary-fixed-variant": "#044d65",
+                        "on-tertiary": "#283500",
+                        "on-surface": "#dee3e7",
+                        "primary-container": "#002d3d",
+                        "error": "#ffb4ab",
+                        "primary": "#96ceeb",
+                        "inverse-primary": "#2a657e",
+                        "secondary-fixed": "#9df5bc",
+                        "on-secondary": "#00391e",
+                        "on-primary-container": "#6098b2",
+                        "surface-container-lowest": "#090f12",
+                        "on-error": "#690005"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Manrope"],
+                        "label": ["Lexend"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bg-glass {
+            background: rgba(26, 32, 36, 0.7);
+            backdrop-filter: blur(20px);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<!-- Auth Shell Suppression: No TopAppBar or BottomNavBar as per transactional/linear flow rule -->
+<main class="min-h-screen flex flex-col md:flex-row">
+<!-- Left Side: Editorial Narrative -->
+<section class="hidden md:flex md:w-1/2 relative overflow-hidden bg-surface-container-lowest items-center justify-center p-12">
+<div class="absolute inset-0 opacity-40">
+<img alt="Professional cricket fast bowler in mid-delivery action" class="w-full h-full object-cover" data-alt="High-quality, professional action shot of a cricket fast bowler during release, with a dramatic, high-contrast sports-tech aesthetic and dark tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3GFqkpQAdrGCr1aonVc3LGXiT4LQaVIM9dgXB3f-FPa05pzfeyqPQtD2Nd-7ZC4T1Zd5Y15gvd-Tt08y95Fsp0PtLEBqTDiI02nDMKxDabJ-g2CElr_RhJi_x2hgNxWRLV5eHtKEr4AQkxoXxzeD6I_0_Ym0DBxeK50MQWcWooGBMyISLj5P9GRfk-OCI_DMRvPw4D6fFCiqsd-B40pwywmzYfyuXYZ556oLcWF5XE1ud6vB2aToL25FGjQ4nV9pJm10iRZPgyQAK"/>
+</div>
+<!-- Pulse Gradient Overlay -->
+<div class="absolute inset-0 bg-gradient-to-tr from-surface via-surface/60 to-transparent"></div>
+<div class="relative z-10 max-w-lg">
+<div class="mb-8 flex items-center gap-3">
+<span class="material-symbols-outlined text-tertiary text-4xl" data-icon="speed">speed</span>
+<h1 class="font-headline text-3xl font-bold tracking-tight text-primary">PitchIQ</h1>
+</div>
+<h2 class="font-headline text-5xl font-bold leading-tight mb-6">Master the <span class="text-tertiary">Release Point.</span></h2>
+<p class="text-on-surface-variant text-lg font-body leading-relaxed max-w-md">
+                    Join the world's most advanced biomechanical lab for fast bowlers. Precision data for elite performance.
+                </p>
+<div class="mt-12 flex gap-8">
+<div>
+<p class="font-label text-tertiary text-2xl font-bold">150+</p>
+<p class="font-label text-xs uppercase tracking-widest text-outline">KPH Tracking</p>
+</div>
+<div>
+<p class="font-label text-primary text-2xl font-bold">0.01s</p>
+<p class="font-label text-xs uppercase tracking-widest text-outline">Accuracy</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Side: Interaction Canvas -->
+<section class="flex-1 flex items-center justify-center p-6 md:p-12 bg-surface">
+<div class="w-full max-w-md">
+<!-- Mobile Branding -->
+<div class="md:hidden mb-10 flex flex-col items-center">
+<span class="material-symbols-outlined text-tertiary text-5xl mb-2" data-icon="speed">speed</span>
+<h1 class="font-headline text-2xl font-bold tracking-tight text-primary">PitchIQ</h1>
+</div>
+<header class="mb-10">
+<h2 class="font-headline text-3xl font-bold mb-2">Create Account</h2>
+<p class="text-on-surface-variant font-body">Start your elite performance journey today.</p>
+</header>
+<form class="space-y-5" onsubmit="window.location.href='{{DATA:SCREEN:SCREEN_13}}'; return false;">
+<!-- Full Name -->
+<div class="space-y-1.5">
+<label class="font-label text-xs font-medium text-outline ml-1">Full Name</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-xl" data-icon="person">person</span>
+<input class="w-full bg-surface-container-lowest border-0 rounded-xl py-4 pl-12 pr-4 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-tertiary transition-all duration-200" placeholder="Jasprit Bumrah" type="text"/>
+</div>
+</div>
+<!-- Email Address -->
+<div class="space-y-1.5">
+<label class="font-label text-xs font-medium text-outline ml-1">Email Address</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-xl" data-icon="mail">mail</span>
+<input class="w-full bg-surface-container-lowest border-0 rounded-xl py-4 pl-12 pr-4 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-tertiary transition-all duration-200" placeholder="bowler@fastbowl.lab" type="email"/>
+</div>
+</div>
+<!-- Password Grid -->
+<div class="grid grid-cols-1 gap-5">
+<div class="space-y-1.5">
+<label class="font-label text-xs font-medium text-outline ml-1">Password</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-xl" data-icon="lock">lock</span>
+<input class="w-full bg-surface-container-lowest border-0 rounded-xl py-4 pl-12 pr-12 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-tertiary transition-all duration-200" placeholder="••••••••" type="password"/>
+<button class="absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors" type="button">
+<span class="material-symbols-outlined text-xl" data-icon="visibility">visibility</span>
+</button>
+</div>
+</div>
+<div class="space-y-1.5">
+<label class="font-label text-xs font-medium text-outline ml-1">Confirm Password</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline text-xl" data-icon="lock_clock">lock_clock</span>
+<input class="w-full bg-surface-container-lowest border-0 rounded-xl py-4 pl-12 pr-12 text-on-surface placeholder:text-outline/50 focus:ring-2 focus:ring-tertiary transition-all duration-200" placeholder="••••••••" type="password"/>
+</div>
+</div>
+</div>
+<!-- Terms -->
+<div class="flex items-start gap-3 py-2">
+<div class="flex items-center h-5">
+<input class="w-5 h-5 rounded border-outline-variant bg-surface-container text-tertiary focus:ring-tertiary focus:ring-offset-surface" type="checkbox"/>
+</div>
+<p class="text-xs text-on-surface-variant font-body">
+                            By creating an account, you agree to our <a class="text-primary hover:underline" href="#">Terms of Service</a> and <a class="text-primary hover:underline" href="#">Privacy Policy</a>.
+                        </p>
+</div>
+<!-- Primary Action -->
+<button class="w-full h-[56px] bg-tertiary text-on-tertiary font-label font-bold text-lg rounded-full shadow-lg shadow-tertiary/10 hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 mt-4" type="submit">
+                        Create Account
+                    </button>
+</form>
+<div class="relative my-8">
+<div class="absolute inset-0 flex items-center">
+<div class="w-full border-t border-outline-variant/30"></div>
+</div>
+<div class="relative flex justify-center text-xs uppercase tracking-widest">
+<span class="bg-surface px-4 text-outline font-label">Or continue with</span>
+</div>
+</div>
+<!-- Social Sign In -->
+<button class="w-full flex items-center justify-center gap-3 h-[56px] border border-outline-variant/30 rounded-full font-label font-medium text-on-surface hover:bg-surface-container-low transition-colors active:scale-[0.98]" onclick="window.location.href='{{DATA:SCREEN:SCREEN_13}}'" type="button">
+<img alt="Google Logo" class="w-5 h-5" data-alt="Official Google logo with vibrant primary colors on a transparent background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCjiSsivf4ktdhOu0oHLFS1oDUspuG4lWAwZ8efwpE78-yDHOiaYvXzUBEkUKAYjMwb5yHXU_L2M6Bko118o_UI6fmgwMI5vpS5pSssJWNYuV4zm_EzSm38CPL3D5JtWIO8EyWKpRkOQMjrywGKcVBEQzmY_qSkEXpFYJPSFrEa4oUBBnkNKsdaak6hd03vYnjusfW7kzc8facFULPvgrE6Q-TYbOkiXTWQ2Oqst1kvBPQTUIf7mbwQWmW7bIUBUeLpL-9AgZZJbAEH"/>
+                    Sign up with Google
+                </button>
+<!-- Footer Link -->
+<footer class="mt-10 text-center">
+<p class="text-on-surface-variant font-body">
+                        Already have an account? 
+                        <a class="text-tertiary font-bold ml-1 hover:underline" href="{{DATA:SCREEN:SCREEN_17}}">Login</a>
+</p>
+</footer>
+</div>
+</section>
+</main>
+<!-- Asymmetric Background Accent -->
+<div class="fixed -bottom-40 -left-40 w-96 h-96 bg-primary/5 rounded-full blur-[100px] pointer-events-none"></div>
+<div class="fixed -top-40 -right-40 w-80 h-80 bg-tertiary/5 rounded-full blur-[100px] pointer-events-none"></div>
+</body></html>

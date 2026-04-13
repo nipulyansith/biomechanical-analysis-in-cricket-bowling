@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Elbow Flexion - FastBowl Lab</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700;800&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script src="api-client.js"></script>
+</head>
+<body class="bg-[#0e1417] text-[#dee3e7] min-h-screen">
+
+<header class="sticky top-0 z-50 bg-[#0e1417]/90 backdrop-blur-md flex justify-between items-center px-6 py-4 border-b border-[#42484c]/10">
+  <div class="flex items-center gap-3">
+    <a href="#" onclick="goBackToResults(event)" class="flex items-center gap-2 hover:opacity-80 transition">
+      <span class="material-symbols-outlined text-primary">arrow_back</span>
+      <h1 class="font-['Space_Grotesk'] text-lg font-bold text-primary">Elbow Flexion</h1>
+    </a>
+  </div>
+  <button onclick="downloadData()" class="flex items-center gap-2 px-4 py-2 bg-[#96ceeb]/10 border border-[#96ceeb]/30 rounded-lg text-[#96ceeb] font-['Manrope'] text-sm hover:bg-[#96ceeb]/20">
+    <span class="material-symbols-outlined">download</span>
+    Assets
+  </button>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-12">
+  
+  <div class="mb-12">
+    <h2 class="font-['Space_Grotesk'] text-3xl font-bold mb-2">Elbow Flexion Analysis</h2>
+    <p class="font-['Manrope'] text-[#c2c7cc]">Tracking elbow angle dynamics throughout the delivery</p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    
+    <div class="bg-[#1a2024] border border-primary/30 rounded-2xl p-6">
+      <h3 class="font-['Space_Grotesk'] text-lg font-bold text-primary mb-4">Angle at Arm-Back</h3>
+      <div id="elbow-arm-back" class="text-3xl font-bold text-primary mb-2">--°</div>
+      <p class="font-['Manrope'] text-[#8c9196] text-sm">Arm-back position</p>
+    </div>
+
+    <div class="bg-[#1a2024] border border-secondary/30 rounded-2xl p-6">
+      <h3 class="font-['Space_Grotesk'] text-lg font-bold text-secondary mb-4">Angle at Release</h3>
+      <div id="elbow-release" class="text-3xl font-bold text-secondary mb-2">--°</div>
+      <p class="font-['Manrope'] text-[#8c9196] text-sm">Ball release point</p>
+    </div>
+
+    <div class="bg-[#1a2024] border border-tertiary/30 rounded-2xl p-6">
+      <h3 class="font-['Space_Grotesk'] text-lg font-bold text-tertiary mb-4">Elbow Extension</h3>
+      <div id="elbow-extension" class="text-3xl font-bold text-tertiary mb-2">--°</div>
+      <p class="font-['Manrope'] text-[#8c9196] text-sm">Angular change (Arm-Back→Release)</p>
+    </div>
+
+  </div>
+
+  <section class="bg-[#1a2024]/50 border border-[#42484c]/30 rounded-2xl p-8 mb-8">
+    <h3 class="font-['Space_Grotesk'] text-2xl font-bold mb-6">Analysis Image</h3>
+    <div id="image-container" class="bg-black rounded-lg overflow-hidden">
+      <img id="analysisImage" src="" alt="Elbow Flexion Analysis" class="w-full">
+    </div>
+  </section>
+
+  <section class="bg-[#1a2024]/50 border border-[#42484c]/30 rounded-2xl p-8 mb-8">
+    <h3 class="font-['Space_Grotesk'] text-2xl font-bold mb-6">Annotated Video</h3>
+    <div class="bg-black rounded-lg overflow-hidden">
+      <video id="analysisVideo" controls class="w-full">
+        Your browser does not support the video tag.
+      </video>
+    </div>
+  </section>
+
+  <div class="flex gap-4 justify-center">
+    <a href="#" onclick="goBackToResults(event)" class="px-8 py-3 bg-[#252b2e] border border-[#42484c]/30 rounded-lg text-[#dee3e7] font-['Manrope'] font-semibold hover:bg-[#303639]">
+      Back to Results
+    </a>
+  </div>
+
+</main>
+
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    if (!window.API) throw new Error('API client not initialized');
+    if (!window.API.sessionId) throw new Error('No session ID available');
+    console.log('📊 Loading elbow flexion data...');
+    const response = await window.API.getResults();
+    if (response.success && response.results) {
+      displayElbowAnalysis(response.results);
+    } else {
+      showError('Could not load analysis results');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    showError('Error: ' + error.message);
+  }
+});
+
+function showError(message) {
+  const errorDiv = document.createElement('div');
+  errorDiv.className = 'fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-lg';
+  errorDiv.textContent = message;
+  document.body.appendChild(errorDiv);
+  setTimeout(() => errorDiv.remove(), 5000);
+}
+
+function displayElbowAnalysis(results) {
+  if (!results.elbow_flexion) {
+    console.log('No elbow flexion data');
+    return;
+  }
+  
+  const data = results.elbow_flexion;
+  console.log('📊 Elbow Data:', data);
+  
+  // Display elbow angles at key points
+  if (data.elbow_at_arm_back !== undefined && !isNaN(data.elbow_at_arm_back)) {
+    document.getElementById('elbow-arm-back').textContent = Math.round(data.elbow_at_arm_back) + '°';
+  }
+  if (data.elbow_at_release !== undefined && !isNaN(data.elbow_at_release)) {
+    document.getElementById('elbow-release').textContent = Math.round(data.elbow_at_release) + '°';
+  }
+  if (data.elbow_extension !== undefined && !isNaN(data.elbow_extension)) {
+    document.getElementById('elbow-extension').textContent = Math.round(data.elbow_extension) + '°';
+  }
+  
+  // Load image
+  loadImage('elbow_full_plots.png');
+  
+  // Load video
+  loadVideo('elbow_flexion');
+}
+
+function loadImage(imageName) {
+  if (!window.API || !window.API.sessionId) {
+    console.error('❌ Cannot load image: No session ID');
+    return;
+  }
+  const img = document.getElementById('analysisImage');
+  img.src = `/api/results/${window.API.sessionId}/image/${imageName}`;
+}
+
+function loadVideo(videoType) {
+  if (!window.API || !window.API.sessionId) {
+    console.error('❌ Cannot load video: No session ID');
+    return;
+  }
+  document.getElementById('analysisVideo').src = `/api/results/${window.API.sessionId}/video/${videoType}_annotated.mp4`;
+}
+
+async function downloadData() {
+  try {
+    if (!window.API || !window.API.sessionId) throw new Error('No active session');
+    await window.API.downloadFile('elbow_csv');
+    await window.API.downloadFile('elbow_png');
+    await window.API.downloadFile('elbow_video');
+  } catch (error) {
+    alert('Download failed: ' + error.message);
+  }
+}
+
+function goBackToResults(event) {
+  event.preventDefault();
+  const sessionId = window.API?.sessionId || localStorage.getItem('lastSessionId');
+  if (sessionId) {
+    window.location.href = `results.html?session=${sessionId}`;
+  } else {
+    window.location.href = 'results.html';
+  }
+}
+</script>
+
+</body>
+</html>

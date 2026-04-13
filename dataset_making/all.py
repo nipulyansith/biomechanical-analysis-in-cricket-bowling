@@ -130,6 +130,191 @@ KEYPOINT_COLORS = {
 }
 
 # =============================================================================
+# ── KEYPOINT VISUALIZATION HELPERS
+# =============================================================================
+def draw_skeleton_with_labels(frame, df_xy, frame_idx, scale=1.0, conf_threshold=0.5):
+    """
+    Draw skeleton keypoints with reference numbers on frame.
+    Returns annotated frame and keypoint data.
+    
+    Args:
+        frame: Input image/frame
+        df_xy: DataFrame with keypoint xy coordinates
+        frame_idx: Index in dataframe (0-based)
+        scale: Output scale factor
+        conf_threshold: Confidence threshold for displaying keypoints
+    
+    Returns:
+        (annotated_frame, keypoints_list)
+        keypoints_list: List of (name, idx, x, y) tuples
+    """
+    annotated = cv2.resize(frame, (int(frame.shape[1] * scale), 
+                                   int(frame.shape[0] * scale))).copy()
+    
+    keypoints_list = []
+    h, w = annotated.shape[:2]
+    
+    # Draw skeleton connections first (backgrounds)
+    for kp1_name, kp2_name in SKELETON_CONNECTIONS:
+        x1_col = f"{kp1_name}_x"
+        y1_col = f"{kp1_name}_y"
+        x2_col = f"{kp2_name}_x"
+        y2_col = f"{kp2_name}_y"
+        
+        if (x1_col in df_xy.columns and y1_col in df_xy.columns and
+            x2_col in df_xy.columns and y2_col in df_xy.columns):
+            
+            x1 = float(df_xy.iloc[frame_idx][x1_col] or 0) * scale
+            y1 = float(df_xy.iloc[frame_idx][y1_col] or 0) * scale
+            x2 = float(df_xy.iloc[frame_idx][x2_col] or 0) * scale
+            y2 = float(df_xy.iloc[frame_idx][y2_col] or 0) * scale
+            
+            if (0 < x1 < w and 0 < y1 < h and 0 < x2 < w and 0 < y2 < h):
+                color = (100, 100, 100)  # Gray for bones
+                cv2.line(annotated, (int(x1), int(y1)), (int(x2), int(y2)), 
+                        color, max(1, int(2 * scale)), cv2.LINE_AA)
+    
+    # Draw and label keypoints
+    dot_radius = max(3, int(6 * scale))
+    font_scale = max(0.3, 0.5 * scale)
+    
+    for idx, kp_name in enumerate(KEYPOINT_NAMES):
+        x_col = f"{kp_name}_x"
+        y_col = f"{kp_name}_y"
+        
+        if x_col in df_xy.columns and y_col in df_xy.columns:
+            x = float(df_xy.iloc[frame_idx][x_col] or 0) * scale
+            y = float(df_xy.iloc[frame_idx][y_col] or 0) * scale
+            
+            if 0 < x < w and 0 < y < h:
+                # Draw circle for keypoint
+                color = KEYPOINT_COLORS.get(kp_name, (255, 255, 255))
+                cv2.circle(annotated, (int(x), int(y)), dot_radius, 
+                          (0, 0, 0), -1, cv2.LINE_AA)  # Black background
+                cv2.circle(annotated, (int(x), int(y)), dot_radius - 1, 
+                          color, -1, cv2.LINE_AA)  # Colored dot
+                cv2.circle(annotated, (int(x), int(y)), dot_radius + 1, 
+                          (255, 255, 255), 1, cv2.LINE_AA)  # White border
+                
+                # Draw reference number
+                ref_num = str(idx)
+                text_size = cv2.getTextSize(ref_num, cv2.FONT_HERSHEY_SIMPLEX, 
+                                           font_scale, 1)[0]
+                text_x = int(x) - text_size[0] // 2
+                text_y = int(y) + text_size[1] // 2
+                
+                cv2.putText(annotated, ref_num, (text_x, text_y),
+                           cv2.FONT_HERSHEY_SIMPLEX, font_scale,
+                           (255, 255, 255), 1, cv2.LINE_AA)
+                
+                keypoints_list.append({
+                    'id': idx,
+                    'name': kp_name,
+                    'x': float(x),
+                    'y': float(y)
+                })
+    
+    # Add legend with keypoint reference
+    legend_y_start = 20
+    legend_h = 12
+    font_scale_legend = 0.35
+    
+    # Draw legend background
+    cv2.rectangle(annotated, (5, legend_y_start - 5), 
+                 (220, legend_y_start + (len(KEYPOINT_NAMES) * legend_h) + 5),
+                 (0, 0, 0), -1)
+    
+    for idx, kp_name in enumerate(KEYPOINT_NAMES):
+        y_pos = legend_y_start + (idx * legend_h)
+        color = KEYPOINT_COLORS.get(kp_name, (255, 255, 255))
+        
+        # Draw color dot
+        cv2.circle(annotated, (15, y_pos + 3), 3, color, -1)
+        
+        # Draw reference number and name
+        text = f"{idx}: {kp_name}"
+        cv2.putText(annotated, text, (25, y_pos + 6),
+                   cv2.FONT_HERSHEY_SIMPLEX, font_scale_legend,
+                   (255, 255, 255), 1, cv2.LINE_AA)
+    
+    return annotated, keypoints_list
+
+def save_keypoint_samples(video_path, df_xy, fps, events, output_dir):
+    """
+    Save annotated frames with skeletal keypoints at key events.
+    Saves frames at: start, FFC, BFC, release, peak wrist speed
+    
+    Returns: List of saved frame paths and metadata
+    """
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        return []
+    
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    
+    keypoint_frames_dir = os.path.join(output_dir, "keypoint_samples")
+    os.makedirs(keypoint_frames_dir, exist_ok=True)
+    
+    saved_frames = []
+    
+    # Define key frames to capture
+    key_frames = [
+        ("start", 0),
+        ("ffc", events.get("ffc_idx", 0)),
+        ("bfc", events.get("bfc_idx", 0)),
+        ("release", events.get("release_idx", 0)),
+    ]
+    
+    for frame_label, frame_idx in key_frames:
+        if frame_idx >= len(df_xy):
+            continue
+            
+        # Read frame from video
+        frame_num = int(df_xy.iloc[frame_idx]["frame"])
+        cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, frame_num - 1))
+        ret, frame = cap.read()
+        
+        if not ret:
+            continue
+        
+        # Draw skeleton with labels
+        annotated, keypoints = draw_skeleton_with_labels(frame, df_xy, frame_idx, 
+                                                         scale=OUTPUT_SCALE)
+        
+        # Save annotated frame
+        frame_filename = f"keypoints_{frame_label}_frame_{frame_num}.jpg"
+        frame_path = os.path.join(keypoint_frames_dir, frame_filename)
+        cv2.imwrite(frame_path, annotated)
+        
+        saved_frames.append({
+            'label': frame_label,
+            'frame_number': frame_num,
+            'filename': frame_filename,
+            'keypoints': keypoints
+        })
+        
+        print(f"  💾 Saved keypoint frame: {frame_label} (frame {frame_num})")
+    
+    cap.release()
+    
+    # Save metadata
+    metadata_path = os.path.join(keypoint_frames_dir, "keypoint_reference.json")
+    metadata = {
+        'keypoint_names': KEYPOINT_NAMES,
+        'keypoint_colors': {k: list(v) for k, v in KEYPOINT_COLORS.items()},
+        'frames': saved_frames,
+        'frame_dimensions': {'width': frame_width, 'height': frame_height}
+    }
+    
+    with open(metadata_path, 'w') as f:
+        json.dump(metadata, f, indent=2)
+    
+    print(f"  📋 Saved keypoint metadata to: {metadata_path}")
+    
+    return saved_frames
+
+# =============================================================================
 # ── SECTION 1 : USER INPUT
 # =============================================================================
 def get_user_inputs():
@@ -531,9 +716,12 @@ def detect_shared_events(df_xy, fps, bowling_wrist, video_path=None):
     bfc_frame = int(df_xy.loc[bfc_idx, "frame"])
 
     # ── Arm-back frame ───────────────────────────────────────────────────────
+    # Arm-back = arm at highest/back position, so wrist is at TOP of frame (minimum Y)
+    # Find VALLEYS (minima) in wrist_y by finding peaks in negative signal
     arm = "right" if bowling_wrist == "right_wrist" else "left"
     wrist_y_sm = smooth(df_xy[f"{arm}_wrist_y"].values.astype(float))
-    arm_back_peaks, _ = find_peaks(wrist_y_sm, distance=max(5, int(0.1 * fps)))
+    wrist_y_inverted = -wrist_y_sm  # Invert to find valleys as peaks
+    arm_back_peaks, _ = find_peaks(wrist_y_inverted, distance=max(5, int(0.1 * fps)))
     arm_back_candidates = arm_back_peaks[arm_back_peaks < release_idx]
 
     if len(arm_back_candidates) > 0:
@@ -810,7 +998,9 @@ def run_delivery_stride(df_xy, fps, events, meters_per_pixel, video_path, width,
     fx = float(df_xy.loc[ffc_idx, f"{f_side}_ankle_x"])
     fy = float(df_xy.loc[ffc_idx, f"{f_side}_ankle_y"])
 
-    stride_px  = float(np.hypot(fx - bx, fy - by))
+    # Stride length: HORIZONTAL distance only (x-axis)
+    # Per spec: "horizontal linear distance between back foot and front foot"
+    stride_px  = float(abs(fx - bx))  # Only horizontal component
     stride_m   = stride_px * meters_per_pixel
     duration_s = (ffc_frame - bfc_frame) / fps
 
@@ -1221,12 +1411,22 @@ def run_knee_flexion(df_xy, df_conf, fps, events, knee_side, video_path, width, 
     compress_video(out_vid)
     print(f"✅ Knee flexion video: {out_vid}")
 
+    # Calculate knee extension (change from FFC to release)
+    # Extension = Release angle - FFC angle (positive = straightening toward 180°, negative = bending from 180°)
+    knee_at_ffc_val = frame_to_knee_angle.get(ffc_frame, np.nan)
+    knee_at_release_val = frame_to_knee_angle.get(release_frame, np.nan)
+    if np.isfinite(knee_at_ffc_val) and np.isfinite(knee_at_release_val):
+        knee_extension = knee_at_release_val - knee_at_ffc_val
+    else:
+        knee_extension = np.nan
+
     return {
         "df_knee":             df_knee,
         "frame_to_knee_angle": frame_to_knee_angle,
         "kside":               kside,
         "knee_angle_at_ffc":     frame_to_knee_angle.get(ffc_frame,     np.nan),
         "knee_angle_at_release": frame_to_knee_angle.get(release_frame, np.nan),
+        "knee_extension":        knee_extension,  # Angular change from FFC to release
     }
 
 # =============================================================================
@@ -1899,6 +2099,10 @@ def main():
     events = detect_shared_events(df_xy, fps, bowling_wrist, video_path=VIDEO_PATH)
     print(f"\n🏏 Release frame: {events['release_frame']}  "
           f"({events['release_frame']/fps:.2f}s)  [{events['release_method']}]")
+    
+    # ── Save keypoint samples with skeletal visualization ────────────────────
+    print(f"\n📸 Saving skeletal keypoint visualizations")
+    save_keypoint_samples(VIDEO_PATH, df_xy, fps, events, OUT_DIR)
 
     r_cadence = run_step_cadence(df_xy, fps, events, VIDEO_PATH, width, height)
     r_stride  = run_delivery_stride(df_xy, fps, events, meters_per_pixel, VIDEO_PATH, width, height)
