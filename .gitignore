@@ -32,7 +32,6 @@ __pycache__/
 
 # Ignore Python Virtual Environments
 .venv/
-RQ1/
 venv/
 env/
 

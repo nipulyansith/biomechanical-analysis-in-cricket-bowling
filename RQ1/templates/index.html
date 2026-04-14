@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Biomechanical Motion Analysis — Cricket Fast-Bowling</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Barlow+Condensed:wght@300;500;700;900&display=swap');
+
+  :root {
+    --bg:        #080c10;
+    --panel:     #0d1218;
+    --border:    #1c2a36;
+    --accent:    #00d4ff;
+    --accent2:   #ff6b35;
+    --green:     #39d353;
+    --yellow:    #f0c040;
+    --red:       #ff4444;
+    --text:      #cdd6e0;
+    --muted:     #4a5d6e;
+    --radius:    6px;
+    --mono:      'JetBrains Mono', monospace;
+    --display:   'Barlow Condensed', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header .logo {
+    font-family: var(--display);
+    font-weight: 900;
+    font-size: 22px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  header .logo span { color: var(--accent2); }
+  .phase-indicator {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .phase-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background .3s;
+  }
+  .phase-dot.active  { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .phase-dot.done    { background: var(--green); }
+  .phase-label {
+    font-family: var(--display);
+    font-size: 12px;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin-left: 6px;
+  }
+
+  /* ── Layout ── */
+  .container { max-width: 1280px; margin: 0 auto; padding: 28px 24px; }
+
+  /* ── Phases ── */
+  .phase { display: none; }
+  .phase.active { display: block; animation: fadeIn .35s ease; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+  /* ── Section titles ── */
+  .section-title {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 28px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .section-title span { color: var(--accent); }
+  .section-sub {
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: .5px;
+    margin-bottom: 28px;
+  }
+
+  /* ── Cards / Panels ── */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    margin-bottom: 18px;
+  }
+  .card-title {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title::before {
+    content: '';
+    display: block;
+    width: 3px; height: 14px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+
+  /* ── Form fields ── */
+  .form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  label {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  input, select {
+    background: #111820;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+
+  /* ── Upload drop zone ── */
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    margin-top: 20px;
+  }
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--accent);
+    background: rgba(0,212,255,.04);
+  }
+  .dropzone-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+    display: block;
+  }
+  .dropzone-text { color: var(--muted); font-size: 13px; }
+  .dropzone-text strong { color: var(--text); }
+
+  /* ── Buttons ── */
+  .btn {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 10px 24px;
+    border-radius: var(--radius);
+    border: none;
+    cursor: pointer;
+    transition: all .2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover { background: #33deff; box-shadow: 0 0 16px rgba(0,212,255,.35); }
+  .btn-secondary {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .btn-secondary:hover { background: rgba(0,212,255,.08); }
+  .btn-danger {
+    background: transparent;
+    color: var(--red);
+    border: 1px solid var(--red);
+  }
+  .btn-danger:hover { background: rgba(255,68,68,.08); }
+  .btn-success {
+    background: var(--green);
+    color: #000;
+  }
+  .btn-success:hover { background: #5ae86a; }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* ── Progress bar ── */
+  .progress-wrap {
+    background: #111820;
+    border-radius: 4px;
+    height: 6px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 4px;
+    transition: width .4s ease;
+  }
+
+  /* ── Canvas area ── */
+  .canvas-wrap {
+    position: relative;
+    display: inline-block;
+    line-height: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    max-width: 100%;
+  }
+  .canvas-wrap canvas {
+    display: block;
+    cursor: crosshair;
+    max-width: 100%;
+  }
+  .canvas-wrap img {
+    display: block;
+    max-width: 100%;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  /* ── Joint sidebar ── */
+  .annotation-layout {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 20px;
+    align-items: start;
+  }
+  .joint-list { display: flex; flex-direction: column; gap: 4px; }
+  .joint-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    transition: all .15s;
+    font-size: 12px;
+  }
+  .joint-item.pending  { color: var(--muted); }
+  .joint-item.current  { border-color: var(--accent); background: rgba(0,212,255,.06); color: #fff; }
+  .joint-item.done     { color: var(--green); }
+  .joint-num {
+    font-size: 10px;
+    color: var(--muted);
+    width: 18px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .joint-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--muted);
+    flex-shrink: 0;
+  }
+  .joint-item.done   .joint-dot { background: var(--green); border-color: var(--green); }
+  .joint-item.current .joint-dot { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+  .frame-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .frame-counter {
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .frame-counter span { color: var(--muted); font-size: 14px; font-weight: 400; }
+
+  .hotkey-hint {
+    background: #111820;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 14px;
+  }
+  kbd {
+    background: var(--border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-family: var(--mono);
+    color: var(--text);
+    font-size: 11px;
+  }
+
+  /* ── Calibration cross-hair ── */
+  .calib-instruction {
+    background: rgba(0,212,255,.08);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    color: var(--accent);
+    font-size: 12px;
+    margin-bottom: 12px;
+    letter-spacing: .3px;
+  }
+
+  /* ── Status / toast ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: var(--radius);
+    padding: 12px 18px;
+    font-size: 12px;
+    z-index: 999;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all .3s;
+    pointer-events: none;
+    max-width: 340px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { border-left-color: var(--red); }
+  .toast.warn  { border-left-color: var(--yellow); }
+
+  /* ── Processing spinner ── */
+  .spinner-wrap {
+    text-align: center;
+    padding: 60px 20px;
+  }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Result panel ── */
+  .result-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .result-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+  }
+  .result-card .rc-label {
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .result-card .rc-count {
+    font-family: var(--display);
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .result-card .rc-unit { color: var(--muted); font-size: 11px; }
+
+  .ppm-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(57,211,83,.1);
+    border: 1px solid var(--green);
+    border-radius: var(--radius);
+    padding: 6px 14px;
+    color: var(--green);
+    font-size: 12px;
+    margin-bottom: 18px;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Cricket <span>Biomech</span> Analyser</div>
+  <div class="phase-indicator">
+    <div class="phase-dot active" id="pd0"></div>
+    <div class="phase-dot" id="pd1"></div>
+    <div class="phase-dot" id="pd2"></div>
+    <div class="phase-dot" id="pd3"></div>
+    <div class="phase-dot" id="pd4"></div>
+    <div class="phase-label" id="phase-label-text">SETUP</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ══ PHASE 0: Setup & Upload ══ -->
+  <div class="phase active" id="phase-0">
+    <div class="section-title">Session <span>Setup</span></div>
+    <div class="section-sub">Configure annotator details and upload the bowling video.</div>
+
+    <div class="card">
+      <div class="card-title">Annotator Metadata</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Annotator Name</label>
+          <input type="text" id="annotator-name" placeholder="e.g. Dr. Rahul Mehta"/>
+        </div>
+        <div class="form-group">
+          <label>Experience Level</label>
+          <select id="experience-level">
+            <option value="Expert">Expert (5+ yrs biomechanics)</option>
+            <option value="Intermediate">Intermediate (2–5 yrs)</option>
+            <option value="Novice">Novice (&lt; 2 yrs)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Video ID</label>
+          <input type="text" id="video-id" placeholder="e.g. FAST_BOWL_001"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Video Upload</div>
+      <div class="dropzone" id="dropzone">
+        <span class="dropzone-icon">🎬</span>
+        <div class="dropzone-text">
+          <strong>Drag & drop</strong> your video here, or click to browse<br/>
+          <span>MP4 · MOV · AVI — max 500 MB</span>
+        </div>
+        <input type="file" id="file-input" accept=".mp4,.mov,.avi" hidden/>
+      </div>
+      <div id="upload-progress" style="margin-top:14px;display:none;">
+        <div class="progress-wrap"><div class="progress-bar" id="upload-bar" style="width:0%"></div></div>
+        <span id="upload-status" style="color:var(--muted);font-size:11px;">Uploading…</span>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="btn-start-calib" disabled onclick="startCalibration()">
+      ▶ Continue to Calibration
+    </button>
+  </div>
+
+  <!-- ══ PHASE 1: Stump Calibration ══ -->
+  <div class="phase" id="phase-1">
+    <div class="section-title">Stump <span>Calibration</span></div>
+    <div class="section-sub">Click the <strong>top</strong> then <strong>bottom</strong> of a cricket stump visible in Frame 0. Reference height = 0.711 m.</div>
+
+    <div id="calib-instruction" class="calib-instruction">
+      ▸ Click 1 of 2 — <strong>Top of stump</strong>
+    </div>
+
+    <div class="canvas-wrap" id="calib-canvas-wrap">
+      <canvas id="calib-canvas"></canvas>
+    </div>
+
+    <div id="calib-ppm-result" style="display:none; margin-top:14px;">
+      <div class="ppm-badge">✓ Calibration set — <strong id="ppm-value">0</strong> px/m · stump height = 0.711 m</div>
+      <br/>
+      <button class="btn btn-primary" onclick="startAnnotation()">▶ Start Manual Annotation</button>
+      <button class="btn btn-secondary" onclick="resetCalibration()" style="margin-left:10px;">↺ Redo Calibration</button>
+    </div>
+  </div>
+
+  <!-- ══ PHASE 2: Manual Annotation ══ -->
+  <div class="phase" id="phase-2">
+    <div class="section-title">Manual <span>Annotation</span></div>
+    <div class="section-sub">Click joints in strict order for each sampled frame (every 10th frame).</div>
+
+    <div class="frame-nav">
+      <div class="frame-counter">Frame <span id="current-frame-label">0</span> <span>/ <span id="total-frames-label">0</span></span></div>
+      <div style="flex:1"></div>
+      <div style="color:var(--muted);font-size:12px;">Frame <span id="frame-idx-counter">1</span> of <span id="frame-total-counter">0</span></div>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-bar" id="annotation-progress-bar" style="width:0%"></div>
+    </div>
+
+    <div class="annotation-layout">
+      <div>
+        <div class="canvas-wrap" id="annot-canvas-wrap">
+          <canvas id="annot-canvas"></canvas>
+        </div>
+        <div class="hotkey-hint">
+          <kbd>Space</kbd> Confirm frame &amp; advance &nbsp;|&nbsp;
+          <kbd>R</kbd> Reset current frame &nbsp;|&nbsp;
+          <kbd>Z</kbd> Undo last click
+        </div>
+      </div>
+      <div>
+        <div class="card" style="padding:16px;">
+          <div class="card-title">Joint Order</div>
+          <div class="joint-list" id="joint-list"></div>
+        </div>
+        <button class="btn btn-danger" onclick="resetCurrentFrame()" style="width:100%;margin-top:4px;">↺ Reset Frame</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PHASE 3: Processing ══ -->
+  <div class="phase" id="phase-3">
+    <div class="section-title">Model <span>Processing</span></div>
+    <div class="section-sub">Running YOLOv8l-Pose and MediaPipe Pose on all sampled frames — this may take a few minutes.</div>
+
+    <div class="card">
+      <div class="spinner-wrap">
+        <div class="spinner"></div>
+        <div id="processing-status" style="color:var(--muted);font-size:13px;">Initialising models…</div>
+        <div id="processing-sub" style="color:var(--muted);font-size:11px;margin-top:6px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PHASE 4: Results & Download ══ -->
+  <div class="phase" id="phase-4">
+    <div class="section-title">Analysis <span>Complete</span></div>
+    <div class="section-sub">Three aligned CSVs are ready for RMSE analysis and motion profiling.</div>
+
+    <div class="result-grid">
+      <div class="result-card">
+        <div class="rc-label">Sampled Frames</div>
+        <div class="rc-count" id="res-frames">0</div>
+        <div class="rc-unit">frames annotated</div>
+      </div>
+      <div class="result-card">
+        <div class="rc-label">Joints × Frame</div>
+        <div class="rc-count" id="res-joints">11</div>
+        <div class="rc-unit">per sampled frame</div>
+      </div>
+      <div class="result-card">
+        <div class="rc-label">Calibration PPM</div>
+        <div class="rc-count" id="res-ppm">0</div>
+        <div class="rc-unit">pixels / metre</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Download Results</div>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:18px;">
+        ZIP contains three CSVs:<br/>
+        <code style="color:var(--accent)">[VideoID]_Manual.csv</code>&nbsp;·&nbsp;
+        <code style="color:var(--accent)">[VideoID]_YOLO.csv</code>&nbsp;·&nbsp;
+        <code style="color:var(--accent)">[VideoID]_MediaPipe.csv</code><br/><br/>
+        Schema: <code>Frame_Num | Joint_Name | Pixel_X | Pixel_Y | Meter_X | Meter_Y | Delta_X | Delta_Y | Annotator_ID</code>
+      </p>
+      <button class="btn btn-success" id="btn-download" onclick="downloadResults()">⬇ Download ZIP</button>
+      <button class="btn btn-secondary" onclick="resetAll()" style="margin-left:12px;">↺ New Session</button>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════════════════
+const JOINT_NAMES = [
+  "Head","L-Shoulder","R-Shoulder",
+  "L-Elbow","R-Elbow",
+  "L-Wrist","R-Wrist",
+  "L-Knee","R-Knee",
+  "L-Ankle","R-Ankle"
+];
+
+// Joint colours for visual markers
+const JOINT_COLORS = [
+  "#00d4ff","#ff6b35","#ff6b35",
+  "#f0c040","#f0c040",
+  "#39d353","#39d353",
+  "#c77dff","#c77dff",
+  "#ff4444","#ff4444"
+];
+
+let state = {
+  sessionId: null,
+  videoId: null,
+  annotatorName: null,
+  experienceLevel: null,
+  totalFrames: 0,
+  fps: 0,
+  videoWidth: 0,
+  videoHeight: 0,
+  sampledFrames: [],
+  ppm: 0,
+  calibClicks: [],       // [{x,y}] — 0=top, 1=bottom
+  currentFrameIdx: 0,    // index into sampledFrames
+  annotations: {},       // { frameNum: [{joint, px, py}] }
+  currentClicks: [],     // clicks for current frame
+  downloadUrl: null,
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase management
+// ═══════════════════════════════════════════════════════════════════════════
+const PHASE_LABELS = ["SETUP","CALIBRATE","ANNOTATE","PROCESSING","RESULTS"];
+
+function showPhase(n) {
+  document.querySelectorAll('.phase').forEach((p,i)=>{
+    p.classList.toggle('active', i===n);
+  });
+  document.querySelectorAll('.phase-dot').forEach((d,i)=>{
+    d.classList.remove('active','done');
+    if(i<n) d.classList.add('done');
+    if(i===n) d.classList.add('active');
+  });
+  document.getElementById('phase-label-text').textContent = PHASE_LABELS[n];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Toast
+// ═══════════════════════════════════════════════════════════════════════════
+let toastTimer = null;
+function toast(msg, type='ok', dur=3500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (type==='error'?' error':type==='warn'?' warn':'');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), dur);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 0 — Upload
+// ═══════════════════════════════════════════════════════════════════════════
+const dropzone  = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+
+dropzone.addEventListener('click', ()=>fileInput.click());
+dropzone.addEventListener('dragover', e=>{ e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', ()=>dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e=>{ e.preventDefault(); dropzone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', ()=>handleFile(fileInput.files[0]));
+
+function handleFile(file) {
+  if(!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if(!['mp4','mov','avi'].includes(ext)) { toast('Unsupported format. Use MP4, MOV, or AVI.','error'); return; }
+
+  dropzone.querySelector('.dropzone-text').innerHTML =
+    `<strong>${file.name}</strong><br/><span>${(file.size/1024/1024).toFixed(1)} MB</span>`;
+
+  const progWrap = document.getElementById('upload-progress');
+  const bar      = document.getElementById('upload-bar');
+  const status   = document.getElementById('upload-status');
+  progWrap.style.display = 'block';
+
+  const fd = new FormData();
+  fd.append('video', file);
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/upload');
+  xhr.upload.onprogress = e => {
+    if(e.lengthComputable) {
+      const pct = (e.loaded/e.total*100).toFixed(1);
+      bar.style.width = pct+'%';
+      status.textContent = `Uploading… ${pct}%`;
+    }
+  };
+  xhr.onload = () => {
+    if(xhr.status === 200) {
+      const d = JSON.parse(xhr.responseText);
+      state.sessionId    = d.session_id;
+      state.totalFrames  = d.total_frames;
+      state.fps          = d.fps;
+      state.videoWidth   = d.width;
+      state.videoHeight  = d.height;
+      state.sampledFrames = d.sampled_frames;
+      status.textContent = `✓ Uploaded — ${d.total_frames} frames @ ${d.fps.toFixed(1)} fps · ${d.width}×${d.height}`;
+      bar.style.width = '100%';
+      document.getElementById('btn-start-calib').disabled = false;
+      toast('Video uploaded successfully');
+    } else {
+      status.textContent = 'Upload failed.';
+      toast('Upload failed: '+xhr.responseText,'error');
+    }
+  };
+  xhr.onerror = ()=>toast('Network error during upload','error');
+  xhr.send(fd);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 1 — Calibration
+// ═══════════════════════════════════════════════════════════════════════════
+let calibImg = null;
+let calibCanvas, calibCtx;
+
+async function startCalibration() {
+  state.annotatorName   = document.getElementById('annotator-name').value.trim() || 'Unknown';
+  state.experienceLevel = document.getElementById('experience-level').value;
+  state.videoId         = document.getElementById('video-id').value.trim() || 'video';
+  if(!state.sessionId) { toast('Please upload a video first.','error'); return; }
+  showPhase(1);
+  await loadCalibFrame();
+}
+
+async function loadCalibFrame() {
+  calibCanvas = document.getElementById('calib-canvas');
+  calibCtx    = calibCanvas.getContext('2d');
+
+  const img = new Image();
+  img.src = `/api/frame/${state.sessionId}/0`;
+  await new Promise(res=>{ img.onload=res; img.onerror=res; });
+
+  calibCanvas.width  = img.naturalWidth;
+  calibCanvas.height = img.naturalHeight;
+  calibCanvas.style.maxWidth = '100%';
+  calibCtx.drawImage(img, 0, 0);
+  calibImg = img;
+
+  calibCanvas.onclick = onCalibClick;
+  state.calibClicks = [];
+  updateCalibInstruction();
+}
+
+function onCalibClick(e) {
+  const rect  = calibCanvas.getBoundingClientRect();
+  const scaleX = calibCanvas.width  / rect.width;
+  const scaleY = calibCanvas.height / rect.height;
+  const x = (e.clientX - rect.left)  * scaleX;
+  const y = (e.clientY - rect.top)   * scaleY;
+
+  if(state.calibClicks.length >= 2) return;
+  state.calibClicks.push({x, y});
+  drawCalibOverlay();
+
+  if(state.calibClicks.length === 2) {
+    const [top, bot] = state.calibClicks;
+    state.ppm = Math.abs(bot.y - top.y) / 0.711;
+    document.getElementById('ppm-value').textContent = state.ppm.toFixed(2);
+    document.getElementById('calib-ppm-result').style.display = 'block';
+    document.getElementById('calib-instruction').textContent = '✓ Two points set. Calibration complete.';
+    calibCanvas.onclick = null;
+    document.getElementById('res-ppm').textContent = state.ppm.toFixed(1);
+    toast(`PPM = ${state.ppm.toFixed(2)} px/m`);
+  } else {
+    updateCalibInstruction();
+  }
+}
+
+function drawCalibOverlay() {
+  calibCtx.clearRect(0, 0, calibCanvas.width, calibCanvas.height);
+  calibCtx.drawImage(calibImg, 0, 0);
+
+  state.calibClicks.forEach((pt, i) => {
+    const label = i === 0 ? 'TOP' : 'BOT';
+    const color = i === 0 ? '#00d4ff' : '#ff6b35';
+    calibCtx.beginPath();
+    calibCtx.arc(pt.x, pt.y, 7, 0, Math.PI*2);
+    calibCtx.fillStyle = color;
+    calibCtx.fill();
+    calibCtx.strokeStyle = '#fff';
+    calibCtx.lineWidth = 2;
+    calibCtx.stroke();
+
+    calibCtx.font = 'bold 13px JetBrains Mono, monospace';
+    calibCtx.fillStyle = color;
+    calibCtx.fillText(label, pt.x+12, pt.y+5);
+  });
+
+  if(state.calibClicks.length === 2) {
+    const [a,b] = state.calibClicks;
+    calibCtx.setLineDash([6,4]);
+    calibCtx.strokeStyle = '#ffffff55';
+    calibCtx.lineWidth = 1.5;
+    calibCtx.beginPath();
+    calibCtx.moveTo(a.x, a.y);
+    calibCtx.lineTo(b.x, b.y);
+    calibCtx.stroke();
+    calibCtx.setLineDash([]);
+  }
+}
+
+function updateCalibInstruction() {
+  const n = state.calibClicks.length;
+  const msg = n===0
+    ? '▸ Click 1 of 2 — Top of stump'
+    : '▸ Click 2 of 2 — Bottom of stump';
+  document.getElementById('calib-instruction').textContent = msg;
+}
+
+function resetCalibration() {
+  state.calibClicks = [];
+  state.ppm = 0;
+  document.getElementById('calib-ppm-result').style.display = 'none';
+  calibCtx.clearRect(0, 0, calibCanvas.width, calibCanvas.height);
+  calibCtx.drawImage(calibImg, 0, 0);
+  calibCanvas.onclick = onCalibClick;
+  updateCalibInstruction();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 2 — Manual Annotation
+// ═══════════════════════════════════════════════════════════════════════════
+let annotCanvas, annotCtx, annotImg;
+let annotImgNW, annotImgNH;
+
+function buildJointList() {
+  const list = document.getElementById('joint-list');
+  list.innerHTML = '';
+  JOINT_NAMES.forEach((j,i) => {
+    const div = document.createElement('div');
+    div.className = 'joint-item pending';
+    div.id = `joint-item-${i}`;
+    div.innerHTML = `
+      <span class="joint-num">${i+1}</span>
+      <span class="joint-dot"></span>
+      <span>${j}</span>`;
+    list.appendChild(div);
+  });
+}
+
+function updateJointList(doneCount) {
+  JOINT_NAMES.forEach((_,i)=>{
+    const el = document.getElementById(`joint-item-${i}`);
+    el.className = 'joint-item '+(i<doneCount?'done': i===doneCount?'current':'pending');
+  });
+}
+
+async function startAnnotation() {
+  showPhase(2);
+  annotCanvas = document.getElementById('annot-canvas');
+  annotCtx    = annotCanvas.getContext('2d');
+  state.currentFrameIdx = 0;
+  state.annotations = {};
+  state.currentClicks = [];
+  buildJointList();
+  await loadAnnotFrame();
+
+  document.onkeydown = onAnnotKey;
+}
+
+async function loadAnnotFrame() {
+  const fn = state.sampledFrames[state.currentFrameIdx];
+  document.getElementById('current-frame-label').textContent = fn;
+  document.getElementById('total-frames-label').textContent  = state.totalFrames-1;
+  document.getElementById('frame-idx-counter').textContent   = state.currentFrameIdx+1;
+  document.getElementById('frame-total-counter').textContent = state.sampledFrames.length;
+
+  const pct = (state.currentFrameIdx / state.sampledFrames.length * 100).toFixed(1);
+  document.getElementById('annotation-progress-bar').style.width = pct+'%';
+
+  const img = new Image();
+  img.src = `/api/frame/${state.sessionId}/${fn}?t=${Date.now()}`;
+  await new Promise(res=>{ img.onload=res; img.onerror=res; });
+
+  annotImgNW = img.naturalWidth;
+  annotImgNH = img.naturalHeight;
+  annotCanvas.width  = annotImgNW;
+  annotCanvas.height = annotImgNH;
+  annotCanvas.style.maxWidth = '100%';
+  annotImg = img;
+
+  // Restore existing clicks if re-visiting
+  state.currentClicks = (state.annotations[fn] || []).map(a=>({x:a.px, y:a.py}));
+  drawAnnotFrame();
+  updateJointList(state.currentClicks.length);
+
+  annotCanvas.onclick = onAnnotClick;
+}
+
+function onAnnotClick(e) {
+  if(state.currentClicks.length >= JOINT_NAMES.length) return;
+  const rect   = annotCanvas.getBoundingClientRect();
+  const scaleX = annotCanvas.width  / rect.width;
+  const scaleY = annotCanvas.height / rect.height;
+  const x = (e.clientX - rect.left)  * scaleX;
+  const y = (e.clientY - rect.top)   * scaleY;
+  state.currentClicks.push({x, y});
+  drawAnnotFrame();
+  updateJointList(state.currentClicks.length);
+  if(state.currentClicks.length === JOINT_NAMES.length) {
+    toast('All 11 joints marked — press Space to confirm', 'ok', 4000);
+  }
+}
+
+function drawAnnotFrame() {
+  annotCtx.clearRect(0, 0, annotCanvas.width, annotCanvas.height);
+  annotCtx.drawImage(annotImg, 0, 0);
+
+  state.currentClicks.forEach((pt, i) => {
+    const col = JOINT_COLORS[i];
+    // Outer ring
+    annotCtx.beginPath();
+    annotCtx.arc(pt.x, pt.y, 10, 0, Math.PI*2);
+    annotCtx.strokeStyle = col;
+    annotCtx.lineWidth = 2;
+    annotCtx.stroke();
+    // Fill dot
+    annotCtx.beginPath();
+    annotCtx.arc(pt.x, pt.y, 4, 0, Math.PI*2);
+    annotCtx.fillStyle = col;
+    annotCtx.fill();
+    // Label
+    annotCtx.font = 'bold 11px JetBrains Mono, monospace';
+    annotCtx.fillStyle = '#fff';
+    annotCtx.strokeStyle = '#00000088';
+    annotCtx.lineWidth = 3;
+    const label = `${i+1}:${JOINT_NAMES[i]}`;
+    annotCtx.strokeText(label, pt.x+13, pt.y+5);
+    annotCtx.fillText(label, pt.x+13, pt.y+5);
+  });
+
+  // Skeleton lines (optional visual aid between connected joints)
+  const pairs = [[1,3],[3,5],[2,4],[4,6],[1,2],[7,9],[9,10],[8,10]]; // simplified
+  annotCtx.setLineDash([4,4]);
+  annotCtx.strokeStyle = '#ffffff33';
+  annotCtx.lineWidth = 1;
+  pairs.forEach(([a,b])=>{
+    if(state.currentClicks[a] && state.currentClicks[b]) {
+      annotCtx.beginPath();
+      annotCtx.moveTo(state.currentClicks[a].x, state.currentClicks[a].y);
+      annotCtx.lineTo(state.currentClicks[b].x, state.currentClicks[b].y);
+      annotCtx.stroke();
+    }
+  });
+  annotCtx.setLineDash([]);
+}
+
+function saveCurrentFrame() {
+  if(state.currentClicks.length < JOINT_NAMES.length) {
+    toast(`Please mark all 11 joints (${state.currentClicks.length}/11 done)`, 'warn');
+    return false;
+  }
+  const fn = state.sampledFrames[state.currentFrameIdx];
+  state.annotations[fn] = state.currentClicks.map((pt, i) => ({
+    joint: JOINT_NAMES[i],
+    px: pt.x,
+    py: pt.y,
+  }));
+  return true;
+}
+
+async function onAnnotKey(e) {
+  if(e.code === 'Space') {
+    e.preventDefault();
+    if(!saveCurrentFrame()) return;
+    if(state.currentFrameIdx < state.sampledFrames.length - 1) {
+      state.currentFrameIdx++;
+      state.currentClicks = [];
+      await loadAnnotFrame();
+    } else {
+      // All frames done
+      document.onkeydown = null;
+      annotCanvas.onclick = null;
+      toast('All frames annotated! Starting model processing…', 'ok', 4000);
+      setTimeout(startProcessing, 800);
+    }
+  } else if(e.code === 'KeyR') {
+    resetCurrentFrame();
+  } else if(e.code === 'KeyZ') {
+    undoLastClick();
+  }
+}
+
+function resetCurrentFrame() {
+  state.currentClicks = [];
+  drawAnnotFrame();
+  updateJointList(0);
+}
+
+function undoLastClick() {
+  if(state.currentClicks.length > 0) {
+    state.currentClicks.pop();
+    drawAnnotFrame();
+    updateJointList(state.currentClicks.length);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 3 — Processing
+// ═══════════════════════════════════════════════════════════════════════════
+async function startProcessing() {
+  showPhase(3);
+
+  const statusEl = document.getElementById('processing-status');
+  const subEl    = document.getElementById('processing-sub');
+
+  // Build flat annotation records
+  const manualAnnotations = [];
+  for(const [frameNumStr, clicks] of Object.entries(state.annotations)) {
+    const frameNum = parseInt(frameNumStr);
+    clicks.forEach(c => {
+      manualAnnotations.push({
+        frame_num:  frameNum,
+        joint_name: c.joint,
+        pixel_x:    c.px,
+        pixel_y:    c.py,
+      });
+    });
+  }
+
+  statusEl.textContent = 'Sending data to server…';
+  subEl.textContent    = 'Running YOLOv8l-Pose + MediaPipe Pose on GPU';
+
+  try {
+    const resp = await fetch('/api/process', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        session_id:         state.sessionId,
+        video_id:           state.videoId,
+        annotator_name:     state.annotatorName,
+        experience_level:   state.experienceLevel,
+        ppm:                state.ppm,
+        manual_annotations: manualAnnotations,
+      }),
+    });
+
+    if(!resp.ok) {
+      const err = await resp.text();
+      throw new Error(err);
+    }
+
+    // Stream ZIP blob for download
+    const blob = await resp.blob();
+    state.downloadUrl = URL.createObjectURL(blob);
+
+    document.getElementById('res-frames').textContent = Object.keys(state.annotations).length;
+    document.getElementById('res-ppm').textContent    = state.ppm.toFixed(1);
+    showPhase(4);
+    toast('Analysis complete — ready to download');
+
+  } catch(err) {
+    statusEl.textContent = 'Error: ' + err.message;
+    subEl.textContent    = 'Check the server console for details.';
+    toast('Processing failed: '+err.message, 'error', 8000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 4 — Download
+// ═══════════════════════════════════════════════════════════════════════════
+function downloadResults() {
+  if(!state.downloadUrl) return;
+  const a = document.createElement('a');
+  a.href = state.downloadUrl;
+  a.download = `${state.videoId}_biomech_analysis.zip`;
+  a.click();
+}
+
+function resetAll() {
+  state = {
+    sessionId: null, videoId: null, annotatorName: null, experienceLevel: null,
+    totalFrames:0, fps:0, videoWidth:0, videoHeight:0, sampledFrames:[],
+    ppm:0, calibClicks:[], currentFrameIdx:0, annotations:{}, currentClicks:[],
+    downloadUrl:null,
+  };
+  document.getElementById('annotator-name').value = '';
+  document.getElementById('video-id').value = '';
+  document.getElementById('file-input').value = '';
+  document.getElementById('upload-progress').style.display = 'none';
+  document.getElementById('btn-start-calib').disabled = true;
+  document.querySelector('.dropzone-text').innerHTML =
+    '<strong>Drag & drop</strong> your video here, or click to browse<br/><span>MP4 · MOV · AVI — max 500 MB</span>';
+  showPhase(0);
+}
+</script>
+</body>
+</html>
