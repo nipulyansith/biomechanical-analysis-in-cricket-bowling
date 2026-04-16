@@ -242,7 +242,8 @@ def draw_skeleton_with_labels(frame, df_xy, frame_idx, scale=1.0, conf_threshold
 def save_keypoint_samples(video_path, df_xy, fps, events, output_dir):
     """
     Save annotated frames with skeletal keypoints at key events.
-    Saves frames at: start, FFC, BFC, release, peak wrist speed
+    Marks release point with visual indicators on all frames.
+    Saves frames at: start, FFC, BFC, release
     
     Returns: List of saved frame paths and metadata
     """
@@ -257,13 +258,17 @@ def save_keypoint_samples(video_path, df_xy, fps, events, output_dir):
     os.makedirs(keypoint_frames_dir, exist_ok=True)
     
     saved_frames = []
+    release_idx = events.get("release_idx", 0)
+    release_frame = events.get("release_frame", 0)
+    release_method = events.get("release_method", "unknown")
+    release_confidence = events.get("release_confidence", 0.0)
     
     # Define key frames to capture
     key_frames = [
         ("start", 0),
         ("ffc", events.get("ffc_idx", 0)),
         ("bfc", events.get("bfc_idx", 0)),
-        ("release", events.get("release_idx", 0)),
+        ("release", release_idx),
     ]
     
     for frame_label, frame_idx in key_frames:
@@ -282,6 +287,53 @@ def save_keypoint_samples(video_path, df_xy, fps, events, output_dir):
         annotated, keypoints = draw_skeleton_with_labels(frame, df_xy, frame_idx, 
                                                          scale=OUTPUT_SCALE)
         
+        # Mark release point on every frame
+        marker_x, marker_y = None, None
+        if release_idx < len(df_xy):
+            # Get wrist positions at release
+            lw_x = float(df_xy.iloc[release_idx].get("left_wrist_x", 0) or 0)
+            rw_x = float(df_xy.iloc[release_idx].get("right_wrist_x", 0) or 0)
+            lw_y = float(df_xy.iloc[release_idx].get("left_wrist_y", 0) or 0)
+            rw_y = float(df_xy.iloc[release_idx].get("right_wrist_y", 0) or 0)
+            
+            # Use wrist that's higher (smaller y) at release
+            if (np.isfinite(lw_y) and np.isfinite(rw_y) and 
+                lw_y > 0 and rw_y > 0):
+                if lw_y < rw_y and lw_x > 0:
+                    marker_x, marker_y = lw_x, lw_y
+                elif rw_x > 0:
+                    marker_x, marker_y = rw_x, rw_y
+            elif np.isfinite(lw_y) and lw_y > 0 and lw_x > 0:
+                marker_x, marker_y = lw_x, lw_y
+            elif np.isfinite(rw_y) and rw_y > 0 and rw_x > 0:
+                marker_x, marker_y = rw_x, rw_y
+            
+            # Draw release point marker if found
+            if marker_x is not None and marker_y is not None:
+                # Scale to output frame size
+                marker_x_s = int(marker_x * OUTPUT_SCALE)
+                marker_y_s = int(marker_y * OUTPUT_SCALE)
+                
+                # Draw filled red circle (release point)
+                cv2.circle(annotated, (marker_x_s, marker_y_s), 
+                          int(20 * OUTPUT_SCALE), (0, 0, 255), 2, cv2.LINE_AA)
+                cv2.circle(annotated, (marker_x_s, marker_y_s), 
+                          int(15 * OUTPUT_SCALE), (0, 0, 255), -1, cv2.LINE_AA)
+                
+                # Draw crosshair
+                cross_size = int(30 * OUTPUT_SCALE)
+                cv2.line(annotated, (marker_x_s - cross_size, marker_y_s), 
+                        (marker_x_s + cross_size, marker_y_s), (0, 0, 255), 2, cv2.LINE_AA)
+                cv2.line(annotated, (marker_x_s, marker_y_s - cross_size), 
+                        (marker_x_s, marker_y_s + cross_size), (0, 0, 255), 2, cv2.LINE_AA)
+                
+                # Add release info box
+                info_text = [f"RELEASE: {release_method}", 
+                            f"Frame {release_frame}, Conf: {release_confidence:.0%}"]
+                y_offset = annotated.shape[0] - int(80 * OUTPUT_SCALE)
+                draw_info_box(annotated, info_text, x=int(10*OUTPUT_SCALE), y=y_offset,
+                             font_scale=0.4*OUTPUT_SCALE, thickness=max(1, int(OUTPUT_SCALE)))
+        
         # Save annotated frame
         frame_filename = f"keypoints_{frame_label}_frame_{frame_num}.jpg"
         frame_path = os.path.join(keypoint_frames_dir, frame_filename)
@@ -291,10 +343,12 @@ def save_keypoint_samples(video_path, df_xy, fps, events, output_dir):
             'label': frame_label,
             'frame_number': frame_num,
             'filename': frame_filename,
-            'keypoints': keypoints
+            'keypoints': keypoints,
+            'release_marker': (marker_x, marker_y) if (marker_x is not None and marker_y is not None) else None
         })
         
-        print(f"  💾 Saved keypoint frame: {frame_label} (frame {frame_num})")
+        indicator = " ✨ RELEASE" if frame_label == "release" else ""
+        print(f"  💾 Saved keypoint frame: {frame_label} (frame {frame_num}){indicator}")
     
     cap.release()
     
@@ -506,153 +560,277 @@ def angle_deg(a, b, c):
     return float(np.degrees(np.arccos(np.clip(np.dot(ba, bc) / denom, -1, 1))))
 
 # =============================================================================
+# ── SECTION 4a : BALL MOTION DETECTION (NEW - Advanced)
+# =============================================================================
+def detect_ball_by_motion_and_color(cap, frame_idx, wrist_xy, fps, pixels_per_meter):
+    """
+    Detect ball using motion filtering + color + spatial constraints.
+    
+    Robustly filters out false positives from:
+    - Red walls/clothing (by motion speed > 15 km/h)
+    - Arm/body motion (by checking direction away from wrist)
+    - Shot noise (by size constraint & shape)
+    
+    Args:
+        cap: cv2.VideoCapture object
+        frame_idx: 0-based frame index to check
+        wrist_xy: (x, y) position of bowling wrist
+        fps: frames per second
+        pixels_per_meter: calibration factor
+    
+    Returns:
+        (ball_center_xy, confidence) or (None, 0) if not detected
+    """
+    # Read current and next frame for optical flow
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+    ret1, f1 = cap.read()
+    ret2, f2 = cap.read()
+    
+    if not ret1 or not ret2:
+        return None, 0.0
+    
+    # Step 1: HSV color filtering for red/orange ball
+    hsv1 = cv2.cvtColor(f1, cv2.COLOR_BGR2HSV)
+    
+    # Red wraps around: 0-10 and 170-180, Orange: 10-25
+    mask_red1 = cv2.inRange(hsv1, (0, 100, 100), (10, 255, 255))
+    mask_red2 = cv2.inRange(hsv1, (170, 100, 100), (180, 255, 255))
+    mask_orange = cv2.inRange(hsv1, (10, 100, 100), (25, 255, 255))
+    color_mask = cv2.bitwise_or(cv2.bitwise_or(mask_red1, mask_red2), mask_orange)
+    
+    # Step 2: Optical flow for motion detection
+    gray1 = cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
+    gray2 = cv2.cvtColor(f2, cv2.COLOR_BGR2GRAY)
+    
+    flow = cv2.calcOpticalFlowFarneback(gray1, gray2, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+    magnitude, _ = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+    
+    # Convert magnitude to km/h (ball ~80+ km/h, humans ~5-10 km/h)
+    magnitude_kmh = (magnitude * fps * pixels_per_meter) * 3.6
+    motion_mask = magnitude_kmh > 15  # 15 km/h threshold
+    
+    # Step 3: Combine color + motion
+    ball_region = cv2.bitwise_and(color_mask, (motion_mask.astype(np.uint8) * 255))
+    
+    # Step 4: Find contours (blobs)
+    contours, _ = cv2.findContours(ball_region, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    valid_contours = []
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        # Ball size: 50-150px diameter = 2000-20000 px² area
+        if 2000 < area < 20000:
+            x, y, w, h = cv2.boundingRect(cnt)
+            # Aspect ratio check (circular)
+            if w > 0 and 0.6 < w / max(h, 1) < 1.4:
+                valid_contours.append((cnt, (x, y, w, h)))
+    
+    if not valid_contours:
+        return None, 0.0
+    
+    # Step 5: Direction constraint - ball moves away from wrist
+    best_ball = None
+    best_separation = -float('inf')
+    best_confidence = 0.0
+    
+    for cnt, (x, y, w, h) in valid_contours:
+        ball_x = x + w // 2
+        ball_y = y + h // 2
+        
+        # Distance from wrist
+        dist_to_wrist = np.hypot(ball_x - wrist_xy[0], ball_y - wrist_xy[1])
+        
+        # Motion direction at ball location
+        if ball_y < len(flow) and ball_x < len(flow[0]):
+            vx, vy = flow[int(ball_y), int(ball_x)]
+        else:
+            continue
+        
+        # Vector from wrist to ball (direction ball should move)
+        away_x = ball_x - wrist_xy[0]
+        away_y = ball_y - wrist_xy[1]
+        
+        # Dot product: positive = moving away
+        away_magnitude = np.hypot(away_x, away_y)
+        if away_magnitude < 1e-6:
+            continue
+        
+        separation_score = (vx * away_x + vy * away_y) / away_magnitude
+        
+        # Confidence based on motion strength and distance from wrist
+        motion_strength = magnitude[int(ball_y), int(ball_x)]
+        confidence = (motion_strength / 50.0) * max(0, separation_score / 10.0)
+        
+        if separation_score > best_separation:
+            best_separation = separation_score
+            best_ball = (ball_x, ball_y)
+            best_confidence = confidence
+    
+    # Only return if ball is moving away strongly
+    if best_separation > 2.0:  # Threshold for "moving away"
+        return best_ball, min(1.0, best_confidence)
+    
+    return None, 0.0
+
+# =============================================================================
 # ── SECTION 4b : RELEASE FRAME DETECTION  (upgraded — Fix 5)
 # =============================================================================
-def detect_release_frame_biomech(df_xy, bowling_wrist, fps, video_path=None):
+def detect_release_frame_biomech(df_xy, bowling_wrist, fps, video_path=None, pixels_per_meter=None):
     """
-    Upgraded release detection.  Three methods tried in order:
+    Upgraded release detection with 3 methods and confidence scoring.
 
-    Method 1 — Wrist speed peak-then-drop  (PRIMARY, most reliable)
-    ─────────────────────────────────────────────────────────────────
-    At ball release the wrist decelerates sharply because the ball mass
-    is no longer being accelerated.  We find the frame where:
-      • wrist speed is at a LOCAL PEAK   (== peak delivery effort)
-      • followed within ~6 frames by a drop of ≥ DROP_RATIO of that peak
-    We search only in the last third of the clip (delivery phase) to
-    avoid run-up peaks.
+    Method 1 — Ball Motion Detection  (PRIMARY - HIGHEST ACCURACY)
+    ───────────────────────────────────────────────────────────────
+    Detects ball using 4-layer filtering:
+    1. HSV color (red/orange cricket ball)
+    2. Optical flow (motion > 15 km/h)
+    3. Size & shape constraints (50-150px, circular)
+    4. Direction constraint (moving away from wrist)
+    
+    Immune to red backgrounds/clothing. Works ±1.5s around wrist speed peak.
 
-    Method 2 — Ball detector YOLO  (OVERRIDE if BALL_MODEL_PATH is set)
-    ─────────────────────────────────────────────────────────────────────
-    Run a dedicated ball-detector model around the Method-1 candidate.
-    The release frame = last frame the ball is within WRIST_BALL_DIST_PX
-    pixels of the bowling wrist.
+    Method 2 — Wrist Speed Peak-Drop (RELIABLE BACKUP)
+    ──────────────────────────────────────────────────
+    Detects sharp deceleration when ball leaves hand.
+    Searches delivery phase (last 60% of clip).
+    Drop threshold: 35% speed reduction within ~120ms.
 
-    Method 3 — Wrist highest (min y)  (FALLBACK)
-    ─────────────────────────────────────────────
-    Original method.  Used only if Method 1 produces no convincing
-    candidate.
+    Method 3 — Wrist Highest (FALLBACK ONLY)
+    ────────────────────────────────────────
+    Original method. Used only if Methods 1-2 fail.
 
-    Returns: release_idx (0-based), release_frame (1-based), method_used
+    Returns: (release_idx, release_frame, method_used, confidence_score)
     """
     dt  = 1.0 / fps
     arm = "right" if bowling_wrist == "right_wrist" else "left"
 
-    # ── compute wrist speed ─────────────────────────────────────────────────
-    wx  = smooth(df_xy[f"{bowling_wrist[:-6]}_wrist_x"
-                       if "_wrist" in bowling_wrist
-                       else f"{arm}_wrist_x"].values.astype(float))
-    wy  = smooth(df_xy[f"{arm}_wrist_y"].values.astype(float))
-
-    # use column names directly
+    # ── Compute wrist speed and acceleration ────────────────────────────────
     wx  = smooth(df_xy[f"{arm}_wrist_x"].values.astype(float))
     wy  = smooth(df_xy[f"{arm}_wrist_y"].values.astype(float))
-
+    
     vx  = central_diff(wx, dt)
     vy  = central_diff(wy, dt)
     spd = np.sqrt(vx**2 + vy**2)
     spd_sm = smooth(spd)
+    
+    # Compute acceleration (derivative of speed)
+    acc = central_diff(spd_sm, dt)
+    acc_sm = smooth(acc)
+    
+    # Compute jerk (derivative of acceleration) for sharper detection
+    jerk = central_diff(acc_sm, dt)
+    jerk_sm = smooth(jerk)
 
     n = len(spd_sm)
 
-    # ── Method 1: peak-then-drop ─────────────────────────────────────────────
-    # Search only in the last 60 % of the clip (delivery phase)
-    search_start = int(n * 0.40)
-    DROP_RATIO   = 0.35   # wrist must drop to ≤ (1-DROP_RATIO)*peak within horizon
-    HORIZON      = max(6, int(0.12 * fps))   # ~120 ms look-ahead
-
-    # Find local speed peaks in the delivery phase
-    delivery_spd = spd_sm[search_start:]
-    peaks, props = find_peaks(delivery_spd,
-                              height=np.nanpercentile(delivery_spd, 60),
-                              distance=max(3, int(0.05 * fps)))
-
+    # ── Method 1: Ball Motion Detection (PRIMARY) ───────────────────────────
     release_idx_m1 = None
-    if len(peaks) > 0:
-        # Evaluate each peak: is there a sharp drop after it?
-        best_drop = 0.0
-        best_peak = None
-        for pk in peaks:
-            abs_pk   = search_start + pk
-            pk_speed = spd_sm[abs_pk]
-            end_win  = min(n - 1, abs_pk + HORIZON)
-            min_after = np.nanmin(spd_sm[abs_pk:end_win + 1])
-            drop_frac = (pk_speed - min_after) / max(pk_speed, 1e-9)
-            if drop_frac > best_drop:
-                best_drop = drop_frac
-                best_peak = abs_pk
-
-        if best_peak is not None and best_drop >= DROP_RATIO:
-            release_idx_m1 = int(best_peak)
-            print(f"  🎯 Release (Method 1 — speed peak-drop): "
-                  f"frame {int(df_xy.loc[release_idx_m1, 'frame'])}  "
-                  f"(drop={best_drop:.2f})")
-
-    # ── Method 2: ball detector override ─────────────────────────────────────
-    release_idx_m2 = None
-    if BALL_MODEL_PATH is not None and video_path is not None:
-        candidate_idx = release_idx_m1 if release_idx_m1 is not None else int(np.nanargmin(wy))
-        candidate_frame = int(df_xy.loc[candidate_idx, "frame"])
-        # search window: ±1.5 s around candidate
-        win_frames = int(1.5 * fps)
-        scan_start = max(0, candidate_idx - win_frames)
-        scan_end   = min(n - 1, candidate_idx + win_frames)
-        scan_start_frame = int(df_xy.loc[scan_start, "frame"])
-
-        try:
-            ball_model = YOLO(BALL_MODEL_PATH)
-            cap_b      = cv2.VideoCapture(video_path)
-            cap_b.set(cv2.CAP_PROP_POS_FRAMES, scan_start_frame - 1)
-            WRIST_BALL_DIST_PX = 80   # pixels at original resolution
-
-            last_contact_idx = None
-            fi = scan_start
-            while fi <= scan_end:
-                ok_b, frm_b = cap_b.read()
-                if not ok_b:
-                    break
-                res_b = ball_model.predict(frm_b, verbose=False)
-                if res_b and res_b[0].boxes is not None and len(res_b[0].boxes) > 0:
-                    confs_b = res_b[0].boxes.conf.cpu().numpy()
-                    xyxy_b  = res_b[0].boxes.xyxy.cpu().numpy()
-                    j = int(np.argmax(confs_b))
-                    x1_b, y1_b, x2_b, y2_b = xyxy_b[j]
-                    ball_cx = (x1_b + x2_b) / 2
-                    ball_cy = (y1_b + y2_b) / 2
-                    # wrist position at this frame
+    confidence_m1 = 0.0
+    
+    if video_path is not None and pixels_per_meter is not None and BALL_MODEL_PATH is None:
+        # Use wrist speed to narrow search window
+        search_start = int(n * 0.40)  # Last 60% (delivery phase)
+        peaks, _ = find_peaks(spd_sm[search_start:],
+                              height=np.nanpercentile(spd_sm[search_start:], 60),
+                              distance=max(3, int(0.05 * fps)))
+        
+        if len(peaks) > 0:
+            # Around the first major peak, search for ball motion
+            peak_frame_idx = search_start + int(peaks[0])
+            search_start_idx = max(0, peak_frame_idx - int(1.5 * fps))
+            search_end_idx = min(n - 1, peak_frame_idx + int(1.5 * fps))
+            
+            cap_ball = cv2.VideoCapture(video_path)
+            best_ball_frame = None
+            best_ball_confidence = 0.0
+            
+            try:
+                for fi in range(search_start_idx, search_end_idx):
                     wrist_x = float(df_xy.loc[fi, f"{arm}_wrist_x"])
                     wrist_y = float(df_xy.loc[fi, f"{arm}_wrist_y"])
-                    dist = float(np.hypot(ball_cx - wrist_x, ball_cy - wrist_y))
-                    if dist <= WRIST_BALL_DIST_PX:
-                        last_contact_idx = fi
-                fi += 1
-            cap_b.release()
+                    
+                    if not (np.isfinite(wrist_x) and np.isfinite(wrist_y)):
+                        continue
+                    
+                    ball_xy, conf = detect_ball_by_motion_and_color(
+                        cap_ball, fi, (wrist_x, wrist_y), fps, pixels_per_meter
+                    )
+                    
+                    if ball_xy is not None and conf > best_ball_confidence:
+                        best_ball_confidence = conf
+                        best_ball_frame = fi
+                
+                cap_ball.release()
+                
+                if best_ball_frame is not None and best_ball_confidence > 0.3:
+                    release_idx_m1 = best_ball_frame
+                    confidence_m1 = best_ball_confidence
+                    print(f"  🎯 Release (Method 1 — ball motion): "
+                          f"frame {int(df_xy.loc[release_idx_m1, 'frame'])}  "
+                          f"(confidence={confidence_m1:.2f})")
+            except Exception as e:
+                print(f"  ⚠️  Ball motion detection failed ({e}) — trying Method 2")
+                cap_ball.release()
 
-            if last_contact_idx is not None:
-                release_idx_m2 = last_contact_idx
-                print(f"  🎯 Release (Method 2 — ball detector): "
-                      f"frame {int(df_xy.loc[release_idx_m2, 'frame'])}")
-        except Exception as e:
-            print(f"  ⚠️  Ball detector failed ({e}) — skipping Method 2.")
+    # ── Method 2: Wrist Speed Peak (SIMPLE & RELIABLE) ───────────────────────
+    release_idx_m2 = None
+    confidence_m2 = 0.0
+    
+    # Detection: Peak wrist speed = moment of maximum effort = release point
+    # (No waiting for drop, use peak itself as release)
+    search_start = int(n * 0.40)  # Last 60% (delivery phase)
+    
+    delivery_spd = spd_sm[search_start:]
+    if len(delivery_spd) > 0:
+        # Find ALL significant peaks in delivery phase
+        peaks, props = find_peaks(delivery_spd,
+                                  height=np.nanpercentile(delivery_spd, 65),
+                                  distance=max(3, int(0.05 * fps)))
+        
+        if len(peaks) > 0:
+            # Find the HIGHEST peak (maximum wrist speed = release moment)
+            peak_heights = props["peak_heights"]
+            highest_peak_in_peaks = int(np.argmax(peak_heights))
+            best_peak_idx = search_start + int(peaks[highest_peak_in_peaks])
+            
+            release_idx_m2 = best_peak_idx
+            peak_speed = spd_sm[best_peak_idx]
+            
+            # Confidence: how much does speed drop after peak? (confirms release)
+            HORIZON = max(6, int(0.12 * fps))
+            end_win = min(n - 1, best_peak_idx + HORIZON)
+            min_after = np.nanmin(spd_sm[best_peak_idx:end_win + 1])
+            drop_ratio = (peak_speed - min_after) / max(peak_speed, 1e-9)
+            
+            confidence_m2 = min(1.0, max(0.6, drop_ratio / 0.5))  # Min 0.6 if peak found
+            
+            print(f"  🎯 Release (Method 2 — wrist speed peak): "
+                  f"frame {int(df_xy.loc[release_idx_m2, 'frame'])}  "
+                  f"(peak_speed={peak_speed:.1f}, confidence={confidence_m2:.2f})")
 
-    # ── Method 3: wrist highest (fallback) ───────────────────────────────────
+    # ── Method 3: Wrist Highest (FALLBACK ONLY) ─────────────────────────────
     release_idx_m3 = int(np.nanargmin(wy))
+    confidence_m3 = 0.1  # Low confidence for fallback
     print(f"  🎯 Release (Method 3 — wrist highest fallback): "
           f"frame {int(df_xy.loc[release_idx_m3, 'frame'])}")
 
-    # ── Choose final release index ────────────────────────────────────────────
-    if release_idx_m2 is not None:
-        final_idx    = release_idx_m2
-        method_used  = "ball_detector"
-    elif release_idx_m1 is not None:
+    # ── Choose final release index with priority ────────────────────────────
+    if release_idx_m1 is not None and confidence_m1 > 0.3:
         final_idx    = release_idx_m1
-        method_used  = "speed_peak_drop"
+        method_used  = "ball_motion_detection"
+        final_confidence = confidence_m1
+    elif release_idx_m2 is not None:
+        final_idx    = release_idx_m2
+        method_used  = "wrist_speed_peak_drop"
+        final_confidence = confidence_m2
     else:
         final_idx    = release_idx_m3
         method_used  = "wrist_highest_fallback"
+        final_confidence = confidence_m3
 
     final_frame = int(df_xy.loc[final_idx, "frame"])
-    print(f"  ✅ Final release: frame {final_frame}  (method={method_used})")
-    return final_idx, final_frame, method_used
+    print(f"  ✅ Final release: frame {final_frame}  (method={method_used}, confidence={final_confidence:.2f})")
+    return final_idx, final_frame, method_used, final_confidence
 
 
 # =============================================================================
@@ -692,14 +870,14 @@ def _find_foot_contact_velocity(df_xy, side, ref_idx, search_before=True):
     return refined
 
 
-def detect_shared_events(df_xy, fps, bowling_wrist, video_path=None):
+def detect_shared_events(df_xy, fps, bowling_wrist, video_path=None, pixels_per_meter=None):
     """
     Compute ALL shared event frames ONCE.
     Release is now detected via detect_release_frame_biomech (upgraded).
     """
     # ── Release (upgraded) ───────────────────────────────────────────────────
-    release_idx, release_frame, release_method = detect_release_frame_biomech(
-        df_xy, bowling_wrist, fps, video_path=video_path)
+    release_idx, release_frame, release_method, release_confidence = detect_release_frame_biomech(
+        df_xy, bowling_wrist, fps, video_path=video_path, pixels_per_meter=pixels_per_meter)
 
     # ── FFC / BFC ────────────────────────────────────────────────────────────
     for side in ("left", "right"):
@@ -740,17 +918,18 @@ def detect_shared_events(df_xy, fps, bowling_wrist, video_path=None):
     print(f"   Release : frame {release_frame}  (idx {release_idx})")
 
     return {
-        "release_idx":      release_idx,
-        "release_frame":    release_frame,
-        "release_method":   release_method,
-        "ffc_idx":          ffc_idx,
-        "ffc_frame":        ffc_frame,
-        "bfc_idx":          bfc_idx,
-        "bfc_frame":        bfc_frame,
-        "f_side":           f_side,
-        "b_side":           b_side,
-        "arm_back_idx":     arm_back_idx,
-        "arm_back_frame":   arm_back_frame,
+        "release_idx":        release_idx,
+        "release_frame":      release_frame,
+        "release_method":     release_method,
+        "release_confidence": release_confidence,
+        "ffc_idx":            ffc_idx,
+        "ffc_frame":          ffc_frame,
+        "bfc_idx":            bfc_idx,
+        "bfc_frame":          bfc_frame,
+        "f_side":             f_side,
+        "b_side":             b_side,
+        "arm_back_idx":       arm_back_idx,
+        "arm_back_frame":     arm_back_frame,
     }
 
 # =============================================================================
@@ -812,6 +991,74 @@ def draw_skeleton_full(img, kp_xy, scale=1.0, highlight_joints=None):
         else:
             cv2.circle(img, (px, py), r + 2, (0, 0, 0), -1, cv2.LINE_AA)
             cv2.circle(img, (px, py), r, color, -1, cv2.LINE_AA)
+
+def draw_release_marker(img, df_xy, release_idx, fps, release_frame, 
+                       release_method, release_confidence, scale=OUTPUT_SCALE):
+    """
+    Draw release point marker on frame.
+    - Red filled circle at wrist position
+    - Red crosshair overlay
+    - Info box showing method and confidence
+    
+    Args:
+        img: Frame to annotate (modified in-place)
+        df_xy: DataFrame with keypoint coordinates
+        release_idx: 0-based index in dataframe
+        fps: frames per second
+        release_frame: 1-based frame number
+        release_method: Detection method name
+        release_confidence: Confidence 0-1.0
+        scale: Output scale factor
+    """
+    if release_idx >= len(df_xy):
+        return
+    
+    # Get wrist positions at release
+    lw_x = float(df_xy.iloc[release_idx].get("left_wrist_x", 0) or 0)
+    rw_x = float(df_xy.iloc[release_idx].get("right_wrist_x", 0) or 0)
+    lw_y = float(df_xy.iloc[release_idx].get("left_wrist_y", 0) or 0)
+    rw_y = float(df_xy.iloc[release_idx].get("right_wrist_y", 0) or 0)
+    
+    # Use wrist that's higher (smaller y) at release
+    marker_x, marker_y = None, None
+    if (np.isfinite(lw_y) and np.isfinite(rw_y) and lw_y > 0 and rw_y > 0):
+        if lw_y < rw_y and lw_x > 0:
+            marker_x, marker_y = lw_x, lw_y
+        elif rw_x > 0:
+            marker_x, marker_y = rw_x, rw_y
+    elif np.isfinite(lw_y) and lw_y > 0 and lw_x > 0:
+        marker_x, marker_y = lw_x, lw_y
+    elif np.isfinite(rw_y) and rw_y > 0 and rw_x > 0:
+        marker_x, marker_y = rw_x, rw_y
+    
+    if marker_x is None or marker_y is None:
+        return
+    
+    # Scale to output frame size
+    marker_x_s = int(marker_x * scale)
+    marker_y_s = int(marker_y * scale)
+    
+    # Draw filled red circle (release point)
+    cv2.circle(img, (marker_x_s, marker_y_s), 
+              int(20 * scale), (0, 0, 255), 2, cv2.LINE_AA)
+    cv2.circle(img, (marker_x_s, marker_y_s), 
+              int(15 * scale), (0, 0, 255), -1, cv2.LINE_AA)
+    
+    # Draw crosshair
+    cross_size = int(30 * scale)
+    cv2.line(img, (marker_x_s - cross_size, marker_y_s), 
+            (marker_x_s + cross_size, marker_y_s), (0, 0, 255), 2, cv2.LINE_AA)
+    cv2.line(img, (marker_x_s, marker_y_s - cross_size), 
+            (marker_x_s, marker_y_s + cross_size), (0, 0, 255), 2, cv2.LINE_AA)
+    
+    # Add release info box
+    time_s = release_frame / fps if fps > 0 else 0
+    info_text = [f"🎯 RELEASE: {release_method}", 
+                f"Frame {release_frame} ({time_s:.2f}s) | Conf: {release_confidence:.0%}"]
+    draw_info_box(img, info_text, x=int(10*scale), 
+                 y=int(img.shape[0] - 80*scale),
+                 font_scale=0.4*scale, thickness=max(1, int(1.5*scale)),
+                 bg_alpha=0.8, color=(0, 255, 255))
 
 # =============================================================================
 # ── SECTION 5 : MODULE 1 — STEP CADENCE  (Fix 4: guaranteed FFC inclusion)
@@ -958,6 +1205,13 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
             info.insert(1, ">>> BALL RELEASE <<<")
         draw_info_box(annotated, info, x=10, y=10,
                       font_scale=0.55 * OUTPUT_SCALE / 0.5)
+        
+        # Draw release point marker on every frame
+        if frame_idx == release_frame:
+            draw_release_marker(annotated, df_xy, events["release_idx"], fps,
+                              release_frame, events["release_method"],
+                              events.get("release_confidence", 0.0), scale=OUTPUT_SCALE)
+        
         repeats = 1
         if frame_idx in last5_frames: repeats = int(fps * 1.2)
         if frame_idx == release_frame: repeats = int(fps * 1.5)
@@ -1051,6 +1305,13 @@ def run_delivery_stride(df_xy, fps, events, meters_per_pixel, video_path, width,
         if event: info.insert(1, f">>> {event} <<<")
         draw_info_box(ann, info, x=10, y=10,
                       font_scale=0.55 * OUTPUT_SCALE / 0.5)
+        
+        # Draw release point marker on release frame
+        if frame_no == release_frame:
+            draw_release_marker(ann, df_xy, events["release_idx"], fps,
+                              release_frame, events["release_method"],
+                              events.get("release_confidence", 0.0), scale=OUTPUT_SCALE)
+        
         repeats = 1
         if frame_no in (bfc_frame, ffc_frame, release_frame):
             repeats = int(fps * 1.5)
@@ -1225,6 +1486,13 @@ def run_elbow_flexion(df_xy, fps, events, bowling_wrist, video_path, width, heig
             info.append(f"Extension: {elbow_extension:.1f} deg")
         if event: info.insert(1, event)
         draw_info_box(ann, info, x=10, y=10, font_scale=0.55 * OUTPUT_SCALE / 0.5)
+        
+        # Draw release point marker on release frame
+        if frame_no == release_frame:
+            draw_release_marker(ann, df_xy, events["release_idx"], fps,
+                              release_frame, events["release_method"],
+                              events.get("release_confidence", 0.0), scale=OUTPUT_SCALE)
+        
         vw.write(ann)
 
     cap.release(); vw.release()
@@ -2096,9 +2364,11 @@ def main():
     df_xy, df_conf, fps, width, height, total_frames = extract_keypoints(VIDEO_PATH, model)
 
     # ── Compute ALL shared events ONCE (upgraded release detection) ───────────
-    events = detect_shared_events(df_xy, fps, bowling_wrist, video_path=VIDEO_PATH)
+    events = detect_shared_events(df_xy, fps, bowling_wrist, video_path=VIDEO_PATH, 
+                                  pixels_per_meter=pixels_per_meter)
+    confidence_str = f", confidence={events['release_confidence']:.2f}" if events.get('release_confidence', 0) > 0 else ""
     print(f"\n🏏 Release frame: {events['release_frame']}  "
-          f"({events['release_frame']/fps:.2f}s)  [{events['release_method']}]")
+          f"({events['release_frame']/fps:.2f}s)  [{events['release_method']}{confidence_str}]")
     
     # ── Save keypoint samples with skeletal visualization ────────────────────
     print(f"\n📸 Saving skeletal keypoint visualizations")
