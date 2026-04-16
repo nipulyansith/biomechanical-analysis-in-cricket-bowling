@@ -849,25 +849,42 @@ def detect_ankle_peaks(df_xy, fps, side, release_idx):
 
 
 def _find_foot_contact_velocity(df_xy, side, ref_idx, search_before=True):
+    """
+    Find foot contact (FFC/BFC) by detecting ground impact.
+    
+    For FFC (frontfoot): Find when ankle reaches MIN Y (lowest = on ground) BEFORE release
+    For BFC (backfoot): Find when ankle reaches MIN Y BEFORE frontfoot contact
+    """
     col = f"{side}_ankle_y_s"
     if col not in df_xy.columns:
         df_xy[col] = smooth(df_xy[f"{side}_ankle_y"].values.astype(float))
-    y_sig    = df_xy[col].values
-    velocity = np.gradient(y_sig)
-    peaks, _ = find_peaks(y_sig, distance=10)
+    
+    y_sig = df_xy[col].values
+    
+    # Find ALL local minima (valleys) = potential ground contact points
+    # Invert signal to use find_peaks on negative values
+    y_inverted = -y_sig
+    valleys, _ = find_peaks(y_inverted, distance=10)
+    
     if search_before:
-        valid    = peaks[peaks <= ref_idx]
-        peak_idx = int(valid[-1]) if len(valid) > 0 else ref_idx
-    else:
-        valid    = peaks[peaks < ref_idx]
-        peak_idx = int(valid[-1]) if len(valid) > 0 else max(0, ref_idx - 10)
-    refined = peak_idx
-    for i in range(peak_idx, max(0, peak_idx - 10), -1):
-        if velocity[i] < 0.5:
-            refined = i
+        # FFC: Find LAST (deepest) valley BEFORE release_idx
+        valid = valleys[valleys <= ref_idx]
+        if len(valid) > 0:
+            contact_idx = int(valid[-1])
         else:
-            break
-    return refined
+            contact_idx = ref_idx
+    else:
+        # BFC: Find LAST (deepest) valley BEFORE ffc_idx (frontfoot)
+        valid = valleys[valleys < ref_idx]
+        if len(valid) > 0:
+            contact_idx = int(valid[-1])
+        else:
+            # Fallback: search backward from ref_idx for lowest Y
+            search_range = max(1, int(0.3 * len(y_sig)))
+            start = max(0, ref_idx - search_range)
+            contact_idx = start + np.argmin(y_sig[start:ref_idx])
+    
+    return contact_idx
 
 
 def detect_shared_events(df_xy, fps, bowling_wrist, video_path=None, pixels_per_meter=None):
