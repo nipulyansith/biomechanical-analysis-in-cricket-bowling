@@ -55,6 +55,8 @@ def main():
             extract_keypoints, detect_shared_events, 
             run_step_cadence, run_delivery_stride, run_elbow_flexion,
             run_knee_flexion, run_head_position, run_wrist_velocity,
+            build_frame_dataset, write_frame_dataset,
+            build_master_row, write_master_dataset,
             MODEL_PATH
         )
         
@@ -113,7 +115,63 @@ def main():
         r_wrist = run_wrist_velocity(df_xy, fps, events, bowling_wrist, meters_per_pixel, args.video, width, height)
         print(f"  ✅ Wrist velocity")
         
-        # Step 5: Save results - clean up dataframes before JSON serialization
+        # Step 5: Build and write Excel datasets
+        print(f"\n📊 Building and writing Excel datasets...")
+        
+        # Get trial ID from video filename
+        trial_id = Path(args.video).stem
+        
+        # Pre-calculate bowling_arm_name like in all.py
+        bowling_arm_name = "right" if args.hand == "R" else "left"
+        
+        # Determine front ankle and knee side for frame dataset
+        kside = r_knee.get("kside") if r_knee and "kside" in r_knee else (
+            "left" if knee_side == "L" else "right")
+        front_ankle = (r_head.get("front_ankle") if r_head and "front_ankle" in r_head
+                       else f"{events.get('f_side', 'left')}_ankle")
+        
+        frame_to_angle = r_elbow.get("frame_to_angle") if r_elbow else None
+        frame_to_knee_angle = r_knee.get("frame_to_knee_angle") if r_knee else None
+        
+        # Build frame dataset
+        df_frames = build_frame_dataset(
+            trial_id=trial_id, 
+            df_xy=df_xy, 
+            fps=fps, 
+            cm_per_pixel=cm_per_pixel,
+            bowling_arm=bowling_arm_name,
+            kside=kside, 
+            front_ankle=front_ankle,
+            frame_to_angle=frame_to_angle, 
+            frame_to_knee_angle=frame_to_knee_angle,
+        )
+        
+        # Write frame dataset to Excel file in dataset_making folder
+        dataset_making_dir = Path(__file__).parent
+        frames_excel_path = dataset_making_dir / "frames.xlsx"
+        write_frame_dataset(df_frames, trial_id, str(frames_excel_path))
+        print(f"✅ Frame dataset written to: {frames_excel_path}")
+        
+        # Build master row
+        master_row = build_master_row(
+            trial_id=trial_id, 
+            fps=fps, 
+            hand=args.hand, 
+            events=events,
+            r_cadence=r_cadence, 
+            r_stride=r_stride, 
+            r_elbow=r_elbow,
+            r_knee=r_knee, 
+            r_head=r_head, 
+            r_wrist=r_wrist,
+        )
+        
+        # Write master dataset to Excel file in dataset_making folder
+        master_excel_path = dataset_making_dir / "master.xlsx"
+        write_master_dataset(master_row, trial_id, str(master_excel_path))
+        print(f"✅ Master dataset written to: {master_excel_path}")
+        
+        # Step 6: Save results - clean up dataframes before JSON serialization
         print(f"\n💾 Saving results...")
         
         # Clean results by removing non-JSON-serializable objects like DataFrames
