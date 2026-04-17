@@ -1,16 +1,28 @@
 """
 FAST BOWLING — UNIFIED BIOMECHANICS PIPELINE + DATASET WRITER
 ==============================================================
-Additional fixes in this version:
-  4. Step cadence now guaranteed to include the shared FFC frame — after
-     peak detection, the FFC frame is injected into the candidate list so
-     the last-5 picker always sees it.
-  5. Release frame detection upgraded:
-       Primary  : peak wrist speed followed by sharp deceleration
-                  (biomechanically = ball leaves hand → wrist slows)
-       Fallback : wrist-highest (original method)
-       Override : optional ball-detector YOLO model (set BALL_MODEL_PATH)
-     This prevents false releases when the bowler runs in with arm raised.
+FIXES in this version:
+  FIX A: stump_calibration — robust video opening with retries, codec fallback,
+          and helpful error messages instead of a bare RuntimeError crash.
+
+  FIX B: Release frame detection completely rewritten.
+          Uses a 4-signal ensemble with confidence voting:
+            1. Wrist peak speed (in delivery window)
+            2. Wrist highest elevation (min-y in delivery window)
+            3. Shoulder-to-wrist vector angle peak (arm fully extended)
+            4. Post-peak deceleration magnitude
+          Each signal nominates a candidate frame and votes with a weight.
+          The frame with the highest weighted vote wins inside a tight
+          ±fps/3 consensus window around the median nominee.
+
+  FIX C: Last-5 foot contacts rewritten with a 3-pass approach:
+          Pass 1 — per-ankle peak detection with adaptive parameters
+          Pass 2 — cross-ankle cluster deduplication (keeps the most
+                   grounded candidate inside each MIN_CLUSTER_GAP window)
+          Pass 3 — forward-walking alternation enforcer: builds the
+                   longest valid alternating sequence that ends at or
+                   before release, then picks the final 5.
+          FFC injection is still guaranteed (unchanged from original Fix 4).
 """
 
 import os, json, datetime
@@ -26,7 +38,7 @@ import openpyxl
 # =============================================================================
 # ── SETTINGS
 # =============================================================================
-VIDEO_PATH   = r"C:\Users\nipul\OneDrive\Desktop\tm\videos\B-05_T-01.MOV"
+VIDEO_PATH   = r"C:\Nipul\videos\B-03_T-01.MOV"
 MODEL_PATH   = "yolov8l-pose.pt"
 BASE_OUT_DIR = "output"
 
@@ -145,14 +157,70 @@ def get_user_inputs():
     return hand, knee_side
 
 # =============================================================================
-# ── SECTION 2 : STUMP CALIBRATION
+# ── SECTION 2 : STUMP CALIBRATION  (FIX A — robust video opening)
 # =============================================================================
+def _open_video_robust(video_path: str, max_retries: int = 3):
+    """
+    Try to open a video with cv2.VideoCapture.
+    Attempts multiple backends (default, FFMPEG, MSMF) and retries
+    to handle transient file-lock or codec issues common with .MOV files.
+    Returns (cap, frame) or raises a descriptive RuntimeError.
+    """
+    if not os.path.exists(video_path):
+        raise RuntimeError(
+            f"Video file not found: '{video_path}'\n"
+            "Please check VIDEO_PATH at the top of the script."
+        )
+
+    backends = [
+        (cv2.CAP_ANY,   "default"),
+        (cv2.CAP_FFMPEG, "FFMPEG"),
+    ]
+    # On Windows also try MSMF
+    if hasattr(cv2, "CAP_MSMF"):
+        backends.append((cv2.CAP_MSMF, "MSMF"))
+
+    last_error = ""
+    for backend, name in backends:
+        for attempt in range(1, max_retries + 1):
+            try:
+                cap = cv2.VideoCapture(video_path, backend)
+                if not cap.isOpened():
+                    cap.release()
+                    last_error = f"Backend {name}: cap.isOpened() returned False"
+                    continue
+
+                # Give the demuxer a moment on large MOV files
+                import time; time.sleep(0.1)
+
+                ok, frame = cap.read()
+                if ok and frame is not None and frame.size > 0:
+                    print(f"  ✅ Video opened via backend={name} (attempt {attempt})")
+                    return cap, frame
+
+                cap.release()
+                last_error = (f"Backend {name} attempt {attempt}: "
+                              "cap.read() returned empty frame")
+            except Exception as exc:
+                last_error = f"Backend {name} attempt {attempt}: {exc}"
+
+    raise RuntimeError(
+        f"Could not read first frame from '{video_path}'.\n"
+        f"Last error: {last_error}\n"
+        "Possible causes:\n"
+        "  • File path contains non-ASCII characters or spaces — try moving the file\n"
+        "  • File is still being written / copied\n"
+        "  • Missing codec for .MOV — install K-Lite or use ffmpeg to convert to .mp4\n"
+        "  • File is corrupt — verify it plays in VLC\n"
+        "  • OpenCV built without FFMPEG support — reinstall: pip install opencv-python"
+    )
+
+
 def stump_calibration(video_path, stump_height_m=0.711):
-    cap = cv2.VideoCapture(video_path)
-    ok, frame = cap.read()
+    # ── FIX A: use robust opener ─────────────────────────────────────────────
+    cap, frame = _open_video_robust(video_path)
     cap.release()
-    if not ok:
-        raise RuntimeError("Could not read first frame for calibration.")
+
     orig_h, orig_w = frame.shape[:2]
     max_disp_w = 900
     disp_scale = min(1.0, max_disp_w / orig_w)
@@ -227,13 +295,19 @@ def stump_calibration(video_path, stump_height_m=0.711):
 # ── SECTION 3 : KEYPOINT EXTRACTION
 # =============================================================================
 def extract_keypoints(video_path, model):
+    # Use robust opener so we always get consistent behaviour
+    cap_test, _ = _open_video_robust(video_path)
+    fps          = float(cap_test.get(cv2.CAP_PROP_FPS) or 30.0)
+    width        = int(cap_test.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height       = int(cap_test.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total_frames = int(cap_test.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap_test.release()
+
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        raise IOError(f"Cannot open video: {video_path}")
-    fps          = float(cap.get(cv2.CAP_PROP_FPS) or 30.0)
-    width        = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height       = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.release()
+        cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
+
     print(f"\n🎥 Video: {total_frames} frames @ {fps:.2f} fps  ({width}×{height})")
     print("⏳ Extracting keypoints (single pass)…")
     xy_rows, conf_rows = [], []
@@ -321,157 +395,219 @@ def angle_deg(a, b, c):
     return float(np.degrees(np.arccos(np.clip(np.dot(ba, bc) / denom, -1, 1))))
 
 # =============================================================================
-# ── SECTION 4b : RELEASE FRAME DETECTION  (upgraded — Fix 5)
+# ── SECTION 4b : RELEASE FRAME DETECTION  (FIX B — 4-signal ensemble)
 # =============================================================================
 def detect_release_frame_biomech(df_xy, bowling_wrist, fps, video_path=None):
     """
-    Upgraded release detection.  Three methods tried in order:
+    4-Signal Ensemble Release Detector
+    ════════════════════════════════════════════════════════════════════════════
 
-    Method 1 — Wrist speed peak-then-drop  (PRIMARY, most reliable)
-    ─────────────────────────────────────────────────────────────────
-    At ball release the wrist decelerates sharply because the ball mass
-    is no longer being accelerated.  We find the frame where:
-      • wrist speed is at a LOCAL PEAK   (== peak delivery effort)
-      • followed within ~6 frames by a drop of ≥ DROP_RATIO of that peak
-    We search only in the last third of the clip (delivery phase) to
-    avoid run-up peaks.
+    Four independent biomechanical signals each nominate a candidate frame.
+    The final release frame is the weighted-median of their nominations,
+    then refined within a tight consensus window by a composite score.
 
-    Method 2 — Ball detector YOLO  (OVERRIDE if BALL_MODEL_PATH is set)
-    ─────────────────────────────────────────────────────────────────────
-    Run a dedicated ball-detector model around the Method-1 candidate.
-    The release frame = last frame the ball is within WRIST_BALL_DIST_PX
-    pixels of the bowling wrist.
+    Signal definitions
+    ──────────────────
+    S1  WRIST SPEED PEAK
+        The bowling wrist reaches its maximum speed just as the ball is
+        transferred to the fingers.  We locate the dominant speed peak in
+        the delivery phase (last 55% of the clip).
+        Weight: 0.35
 
-    Method 3 — Wrist highest (min y)  (FALLBACK)
-    ─────────────────────────────────────────────
-    Original method.  Used only if Method 1 produces no convincing
-    candidate.
+    S2  WRIST ELEVATION MINIMUM  (highest physical point)
+        In pixel coordinates, smaller y = higher position.  The arm is
+        typically at its apex at or fractionally after release.
+        Weight: 0.25
+
+    S3  SHOULDER-TO-WRIST VECTOR ANGLE PEAK
+        We compute the angle of the vector from the bowling shoulder to
+        the bowling wrist.  At full arm extension / release this angle
+        passes through a characteristic maximum (or crosses from
+        increasing to decreasing).  We locate that turning-point.
+        Weight: 0.25
+
+    S4  POST-PEAK DECELERATION ONSET
+        After release, the wrist decelerates sharply because the ball is
+        gone and gravity/muscle damping dominate.  We find the frame
+        where deceleration (speed drop over next 3 frames) is largest,
+        constrained to start no earlier than S1-3 frames.
+        Weight: 0.15
+
+    Consensus window & final scoring
+    ──────────────────────────────────
+    The four nominees are sorted.  We compute a weighted-median nominee
+    and define a consensus window of ±(fps/3) frames around it.  Inside
+    that window every frame is scored:
+
+        score = 0.40 * norm_speed(i)
+              + 0.25 * proximity_to_miny(i)
+              + 0.20 * decel_score(i)
+              + 0.15 * arm_angle_score(i)
+
+    The frame with the highest score is returned as the release frame.
 
     Returns: release_idx (0-based), release_frame (1-based), method_used
     """
     dt  = 1.0 / fps
     arm = "right" if bowling_wrist == "right_wrist" else "left"
+    n   = len(df_xy)
 
-    # ── compute wrist speed ─────────────────────────────────────────────────
-    wx  = smooth(df_xy[f"{bowling_wrist[:-6]}_wrist_x"
-                       if "_wrist" in bowling_wrist
-                       else f"{arm}_wrist_x"].values.astype(float))
-    wy  = smooth(df_xy[f"{arm}_wrist_y"].values.astype(float))
-
-    # use column names directly
-    wx  = smooth(df_xy[f"{arm}_wrist_x"].values.astype(float))
-    wy  = smooth(df_xy[f"{arm}_wrist_y"].values.astype(float))
+    # ── 1. Smooth trajectories ───────────────────────────────────────────────
+    wx = smooth(df_xy[f"{arm}_wrist_x"].values.astype(float))
+    wy = smooth(df_xy[f"{arm}_wrist_y"].values.astype(float))
+    sx = smooth(df_xy[f"{arm}_shoulder_x"].values.astype(float))
+    sy = smooth(df_xy[f"{arm}_shoulder_y"].values.astype(float))
 
     vx  = central_diff(wx, dt)
     vy  = central_diff(wy, dt)
     spd = np.sqrt(vx**2 + vy**2)
-    spd_sm = smooth(spd)
+    spd_sm = smooth(spd)          # second-pass smooth for stability
 
-    n = len(spd_sm)
+    # Shoulder→Wrist angle (degrees, 0 = rightward horizontal)
+    sw_angle = np.degrees(np.arctan2(wy - sy, wx - sx))
+    sw_angle_sm = smooth(sw_angle)
 
-    # ── Method 1: peak-then-drop ─────────────────────────────────────────────
-    # Search only in the last 60 % of the clip (delivery phase)
-    search_start = int(n * 0.40)
-    DROP_RATIO   = 0.35   # wrist must drop to ≤ (1-DROP_RATIO)*peak within horizon
-    HORIZON      = max(6, int(0.12 * fps))   # ~120 ms look-ahead
+    # ── 2. Delivery search window: last 55% of clip ──────────────────────────
+    search_start = int(n * 0.45)
+    del_spd  = spd_sm[search_start:]
+    del_wy   = wy[search_start:]
+    del_ang  = sw_angle_sm[search_start:]
 
-    # Find local speed peaks in the delivery phase
-    delivery_spd = spd_sm[search_start:]
-    peaks, props = find_peaks(delivery_spd,
-                              height=np.nanpercentile(delivery_spd, 60),
-                              distance=max(3, int(0.05 * fps)))
+    # ── S1: wrist speed peak ─────────────────────────────────────────────────
+    spd_threshold = np.nanpercentile(del_spd, 55)
+    min_dist_pk   = max(3, int(0.05 * fps))
+    peaks_s1, props_s1 = find_peaks(
+        del_spd,
+        height=spd_threshold,
+        distance=min_dist_pk,
+        prominence=np.nanstd(del_spd) * 0.3,
+    )
+    s1_idx = None
+    if len(peaks_s1) > 0:
+        # Best = highest speed
+        best_local = peaks_s1[int(np.argmax(del_spd[peaks_s1]))]
+        s1_idx     = search_start + int(best_local)
 
-    release_idx_m1 = None
-    if len(peaks) > 0:
-        # Evaluate each peak: is there a sharp drop after it?
-        best_drop = 0.0
-        best_peak = None
-        for pk in peaks:
-            abs_pk   = search_start + pk
-            pk_speed = spd_sm[abs_pk]
-            end_win  = min(n - 1, abs_pk + HORIZON)
-            min_after = np.nanmin(spd_sm[abs_pk:end_win + 1])
-            drop_frac = (pk_speed - min_after) / max(pk_speed, 1e-9)
-            if drop_frac > best_drop:
-                best_drop = drop_frac
-                best_peak = abs_pk
+    # ── S2: wrist elevation minimum (highest point) ──────────────────────────
+    s2_idx = search_start + int(np.nanargmin(del_wy))
 
-        if best_peak is not None and best_drop >= DROP_RATIO:
-            release_idx_m1 = int(best_peak)
-            print(f"  🎯 Release (Method 1 — speed peak-drop): "
-                  f"frame {int(df_xy.loc[release_idx_m1, 'frame'])}  "
-                  f"(drop={best_drop:.2f})")
-
-    # ── Method 2: ball detector override ─────────────────────────────────────
-    release_idx_m2 = None
-    if BALL_MODEL_PATH is not None and video_path is not None:
-        candidate_idx = release_idx_m1 if release_idx_m1 is not None else int(np.nanargmin(wy))
-        candidate_frame = int(df_xy.loc[candidate_idx, "frame"])
-        # search window: ±1.5 s around candidate
-        win_frames = int(1.5 * fps)
-        scan_start = max(0, candidate_idx - win_frames)
-        scan_end   = min(n - 1, candidate_idx + win_frames)
-        scan_start_frame = int(df_xy.loc[scan_start, "frame"])
-
-        try:
-            ball_model = YOLO(BALL_MODEL_PATH)
-            cap_b      = cv2.VideoCapture(video_path)
-            cap_b.set(cv2.CAP_PROP_POS_FRAMES, scan_start_frame - 1)
-            WRIST_BALL_DIST_PX = 80   # pixels at original resolution
-
-            last_contact_idx = None
-            fi = scan_start
-            while fi <= scan_end:
-                ok_b, frm_b = cap_b.read()
-                if not ok_b:
-                    break
-                res_b = ball_model.predict(frm_b, verbose=False)
-                if res_b and res_b[0].boxes is not None and len(res_b[0].boxes) > 0:
-                    confs_b = res_b[0].boxes.conf.cpu().numpy()
-                    xyxy_b  = res_b[0].boxes.xyxy.cpu().numpy()
-                    j = int(np.argmax(confs_b))
-                    x1_b, y1_b, x2_b, y2_b = xyxy_b[j]
-                    ball_cx = (x1_b + x2_b) / 2
-                    ball_cy = (y1_b + y2_b) / 2
-                    # wrist position at this frame
-                    wrist_x = float(df_xy.loc[fi, f"{arm}_wrist_x"])
-                    wrist_y = float(df_xy.loc[fi, f"{arm}_wrist_y"])
-                    dist = float(np.hypot(ball_cx - wrist_x, ball_cy - wrist_y))
-                    if dist <= WRIST_BALL_DIST_PX:
-                        last_contact_idx = fi
-                fi += 1
-            cap_b.release()
-
-            if last_contact_idx is not None:
-                release_idx_m2 = last_contact_idx
-                print(f"  🎯 Release (Method 2 — ball detector): "
-                      f"frame {int(df_xy.loc[release_idx_m2, 'frame'])}")
-        except Exception as e:
-            print(f"  ⚠️  Ball detector failed ({e}) — skipping Method 2.")
-
-    # ── Method 3: wrist highest (fallback) ───────────────────────────────────
-    release_idx_m3 = int(np.nanargmin(wy))
-    print(f"  🎯 Release (Method 3 — wrist highest fallback): "
-          f"frame {int(df_xy.loc[release_idx_m3, 'frame'])}")
-
-    # ── Choose final release index ────────────────────────────────────────────
-    if release_idx_m2 is not None:
-        final_idx    = release_idx_m2
-        method_used  = "ball_detector"
-    elif release_idx_m1 is not None:
-        final_idx    = release_idx_m1
-        method_used  = "speed_peak_drop"
+    # ── S3: shoulder→wrist angle turning point ───────────────────────────────
+    # We look for the last local maximum of the angle in the delivery window
+    # (arm sweeps upward = angle increases, then flicks over at release).
+    ang_peaks, _ = find_peaks(
+        del_ang,
+        distance=max(3, int(0.04 * fps)),
+        prominence=5.0,
+    )
+    s3_idx = None
+    if len(ang_peaks) > 0:
+        s3_idx = search_start + int(ang_peaks[-1])  # last peak before some decline
     else:
-        final_idx    = release_idx_m3
-        method_used  = "wrist_highest_fallback"
+        # Fallback: gradient sign change (first derivative zero-crossing)
+        grad_ang = np.gradient(del_ang)
+        sign_changes = np.where(np.diff(np.sign(grad_ang)) < 0)[0]
+        if len(sign_changes) > 0:
+            s3_idx = search_start + int(sign_changes[-1])
 
+    # ── S4: largest deceleration onset (constrained to ≥ S1) ─────────────────
+    s4_idx = None
+    start_s4 = s1_idx if s1_idx is not None else search_start
+    # decel[i] = spd_sm[i] - spd_sm[i+3]  (positive = slowing down)
+    if start_s4 < n - 3:
+        decel = np.zeros(n)
+        for i in range(start_s4, n - 3):
+            decel[i] = spd_sm[i] - spd_sm[i + 3]
+        # Only look past s1 to avoid pre-delivery noise
+        decel_window = decel[start_s4:]
+        best_decel   = int(np.argmax(decel_window))
+        s4_idx       = start_s4 + best_decel
+
+    # ── Diagnostic log ───────────────────────────────────────────────────────
+    def _f(idx): return int(df_xy.loc[idx, "frame"]) if idx is not None else None
+    print(f"  📊 Release ensemble nominees:")
+    print(f"       S1 speed-peak      : frame {_f(s1_idx)}  (idx {s1_idx})")
+    print(f"       S2 wrist-elevation : frame {_f(s2_idx)}  (idx {s2_idx})")
+    print(f"       S3 arm-angle peak  : frame {_f(s3_idx)}  (idx {s3_idx})")
+    print(f"       S4 decel-onset     : frame {_f(s4_idx)}  (idx {s4_idx})")
+
+    # ── 3. Weighted-median consensus ─────────────────────────────────────────
+    nominees = []
+    weights  = []
+    for idx_nom, w in [(s1_idx, 0.35), (s2_idx, 0.25), (s3_idx, 0.25), (s4_idx, 0.15)]:
+        if idx_nom is not None:
+            nominees.append(idx_nom)
+            weights.append(w)
+
+    if len(nominees) == 0:
+        # Absolute fallback — last 30% of delivery window
+        fallback = search_start + int(len(del_spd) * 0.7)
+        print(f"  ⚠️  No nominees found — using fallback idx {fallback}")
+        return int(fallback), int(df_xy.loc[fallback, "frame"]), "fallback_no_nominees"
+
+    # Weighted median
+    nominees_arr = np.array(nominees, float)
+    weights_arr  = np.array(weights,  float)
+    weights_arr /= weights_arr.sum()
+    sorted_idx   = np.argsort(nominees_arr)
+    nominees_arr = nominees_arr[sorted_idx]
+    weights_arr  = weights_arr[sorted_idx]
+    cum_w        = np.cumsum(weights_arr)
+    median_idx   = int(nominees_arr[np.searchsorted(cum_w, 0.5)])
+
+    # ── 4. Consensus window: median ± fps/3 ──────────────────────────────────
+    half_win = max(4, int(fps / 3.0))
+    win_lo   = max(search_start, median_idx - half_win)
+    win_hi   = min(n - 1,        median_idx + half_win)
+
+    print(f"       Weighted-median idx: {median_idx}  "
+          f"→ consensus window [{win_lo}, {win_hi}]")
+
+    # Pre-compute normalisation
+    max_speed = max(float(np.nanmax(spd_sm)), 1e-9)
+    min_y_val = float(np.nanmin(wy[win_lo:win_hi+1]))
+    max_y_val = float(np.nanmax(wy[win_lo:win_hi+1]))
+    y_range   = max(max_y_val - min_y_val, 1e-9)
+
+    min_ang_val = float(np.nanmin(sw_angle_sm[win_lo:win_hi+1]))
+    max_ang_val = float(np.nanmax(sw_angle_sm[win_lo:win_hi+1]))
+    ang_range   = max(max_ang_val - min_ang_val, 1e-9)
+
+    best_score = -1.0
+    best_idx   = median_idx  # guaranteed fallback
+
+    for i in range(win_lo, win_hi + 1):
+        # Component 1: wrist speed
+        c_speed = spd_sm[i] / max_speed
+
+        # Component 2: wrist elevation (lower y = higher = better)
+        c_elev  = 1.0 - (wy[i] - min_y_val) / y_range
+
+        # Component 3: deceleration (speed drop 3 frames ahead)
+        if i + 3 <= n - 1:
+            c_decel = max(0.0, spd_sm[i] - spd_sm[i + 3]) / max_speed
+        else:
+            c_decel = 0.0
+
+        # Component 4: arm angle proximity to its own maximum in the window
+        c_ang = (sw_angle_sm[i] - min_ang_val) / ang_range
+
+        score = (0.40 * c_speed + 0.25 * c_elev +
+                 0.20 * c_decel + 0.15 * c_ang)
+
+        if score > best_score:
+            best_score = score
+            best_idx   = i
+
+    final_idx   = int(best_idx)
+    method_used = "ensemble_4signal"
     final_frame = int(df_xy.loc[final_idx, "frame"])
-    print(f"  ✅ Final release: frame {final_frame}  (method={method_used})")
+    print(f"  ✅ Selected release: frame {final_frame}  "
+          f"(idx {final_idx},  score={best_score:.4f},  method={method_used})")
     return final_idx, final_frame, method_used
 
 
 # =============================================================================
-# ── SECTION 4c : SHARED EVENT DETECTION  (computed ONCE in main)
+# ── SECTION 4c : SHARED EVENT DETECTION
 # =============================================================================
 def detect_ankle_peaks(df_xy, fps, side, release_idx):
     col  = f"{side}_ankle_y"
@@ -508,15 +644,12 @@ def _find_foot_contact_velocity(df_xy, side, ref_idx, search_before=True):
 
 
 def detect_shared_events(df_xy, fps, bowling_wrist, video_path=None):
-    """
-    Compute ALL shared event frames ONCE.
-    Release is now detected via detect_release_frame_biomech (upgraded).
-    """
-    # ── Release (upgraded) ───────────────────────────────────────────────────
+    """Compute ALL shared event frames ONCE."""
+    # Release — upgraded 4-signal ensemble
     release_idx, release_frame, release_method = detect_release_frame_biomech(
         df_xy, bowling_wrist, fps, video_path=video_path)
 
-    # ── FFC / BFC ────────────────────────────────────────────────────────────
+    # FFC / BFC
     for side in ("left", "right"):
         df_xy[f"{side}_ankle_y_s"] = smooth(
             df_xy[f"{side}_ankle_y"].values.astype(float))
@@ -530,7 +663,7 @@ def detect_shared_events(df_xy, fps, bowling_wrist, video_path=None):
     ffc_frame = int(df_xy.loc[ffc_idx, "frame"])
     bfc_frame = int(df_xy.loc[bfc_idx, "frame"])
 
-    # ── Arm-back frame ───────────────────────────────────────────────────────
+    # Arm-back frame
     arm = "right" if bowling_wrist == "right_wrist" else "left"
     wrist_y_sm = smooth(df_xy[f"{arm}_wrist_y"].values.astype(float))
     arm_back_peaks, _ = find_peaks(wrist_y_sm, distance=max(5, int(0.1 * fps)))
@@ -626,14 +759,20 @@ def draw_skeleton_full(img, kp_xy, scale=1.0, highlight_joints=None):
             cv2.circle(img, (px, py), r, color, -1, cv2.LINE_AA)
 
 # =============================================================================
-# ── SECTION 5 : MODULE 1 — STEP CADENCE  (Fix 4: guaranteed FFC inclusion)
+# ── SECTION 5 : MODULE 1 — STEP CADENCE  (BFC=step4, FFC=step5 fixed)
 # =============================================================================
 def run_step_cadence(df_xy, fps, events, video_path, width, height):
     """
-    Fix 4: After standard peak detection, the shared ffc_frame is injected
-    into the step-event list (if not already present) so that pick_alternating_last5
-    always sees the delivery FFC.  The injection uses the correct foot label
-    derived from events['f_side'].
+    Step Cadence — BFC and FFC are always steps 4 and 5.
+    ════════════════════════════════════════════════════════════════════════
+    Steps 1-3  are the last three foot contacts *before* BFC, found by the
+               3-pass peak detector (identical logic to the original Fix C,
+               but the search window is capped at bfc_frame - 1).
+
+    Step 4     = BFC frame  (from shared events — never moved)
+    Step 5     = FFC frame  (from shared events — never moved)
+
+    Intervals and duration are computed over all 5 steps as before.
     """
     print("\n" + "─"*60)
     print("MODULE 1 — STEP CADENCE")
@@ -641,52 +780,105 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
 
     release_frame = events["release_frame"]
     ffc_frame     = events["ffc_frame"]
-    ffc_foot      = events["f_side"]   # "left" or "right" — front foot side
+    ffc_foot      = events["f_side"]
+    bfc_frame     = events["bfc_frame"]
+    bfc_foot      = events["b_side"]
 
-    min_dist = max(6, int(0.20 * fps))
-    r_sig    = smooth(df_xy["right_ankle_y"].values.astype(float))
-    l_sig    = smooth(df_xy["left_ankle_y"].values.astype(float))
+    MIN_CLUSTER_GAP = max(4, int(0.15 * fps))
+    min_dist        = max(6, int(0.20 * fps))
 
-    # Lower the prominence slightly so nearby contacts are not filtered out
-    r_peaks, _ = find_peaks(r_sig, distance=min_dist, prominence=20)
-    l_peaks, _ = find_peaks(l_sig, distance=min_dist, prominence=20)
-
+    r_sig = smooth(df_xy["right_ankle_y"].values.astype(float))
+    l_sig = smooth(df_xy["left_ankle_y"].values.astype(float))
     ankle_frames = df_xy["frame"].values
-    step_events  = (
-        [(int(ankle_frames[p]), "right") for p in r_peaks] +
-        [(int(ankle_frames[p]), "left")  for p in l_peaks]
+
+    # ── PASS 1: adaptive prominence — search ONLY before BFC ─────────────────
+    def find_peaks_adaptive(sig, min_distance, prominence_levels):
+        for prom in prominence_levels:
+            pks, _ = find_peaks(sig, distance=min_distance, prominence=prom)
+            if len(pks) >= 3:
+                return pks
+        pks, _ = find_peaks(sig, distance=min_distance)
+        return pks
+
+    prom_levels = [30, 15, 8, 3]
+    r_peaks_all = find_peaks_adaptive(r_sig, min_dist, prom_levels)
+    l_peaks_all = find_peaks_adaptive(l_sig, min_dist, prom_levels)
+
+    # Convert to frame numbers and keep only those strictly before BFC
+    r_peaks = [p for p in r_peaks_all if int(ankle_frames[p]) < bfc_frame]
+    l_peaks = [p for p in l_peaks_all if int(ankle_frames[p]) < bfc_frame]
+
+    print(f"  Raw peaks before BFC — right: {len(r_peaks)}, left: {len(l_peaks)}")
+
+    # Build raw event list before BFC: (frame, foot, ankle_y)
+    step_events_raw = (
+        [(int(ankle_frames[p]), "right", float(r_sig[p])) for p in r_peaks] +
+        [(int(ankle_frames[p]), "left",  float(l_sig[p])) for p in l_peaks]
     )
-    step_events.sort(key=lambda x: x[0])
-    step_events = [s for s in step_events if s[0] <= release_frame]
+    step_events_raw.sort(key=lambda x: x[0])
 
-    # ── FIX 4: inject FFC if missing ────────────────────────────────────────
-    # Check if ffc_frame is already covered (within ±3 frames of any detected step)
-    MERGE_TOLERANCE = 3
-    ffc_covered = any(abs(s[0] - ffc_frame) <= MERGE_TOLERANCE for s in step_events)
+    # ── PASS 2: cross-ankle cluster deduplication ────────────────────────────
+    def merge_contact_clusters(evts, gap):
+        if not evts:
+            return []
+        merged = [evts[0]]
+        for evt in evts[1:]:
+            prev = merged[-1]
+            if evt[0] - prev[0] <= gap:
+                if evt[2] > prev[2]:        # larger Y = more grounded
+                    merged[-1] = evt
+            else:
+                merged.append(evt)
+        return [(f, foot) for f, foot, _ in merged]
 
-    if not ffc_covered:
-        step_events.append((ffc_frame, ffc_foot))
-        step_events.sort(key=lambda x: x[0])
-        print(f"  ℹ️  FFC frame {ffc_frame} not detected by peak finder — injected as {ffc_foot} foot.")
+    pre_bfc_events = merge_contact_clusters(step_events_raw, MIN_CLUSTER_GAP)
+    print(f"  After cluster-merge (pre-BFC): {len(pre_bfc_events)} events")
 
-    print("\n📋 Foot-contact events before release:")
-    for s in step_events:
-        print(f"   Frame {s[0]:>4d} — {s[1]} foot")
+    # ── PASS 3: longest valid alternating sequence before BFC ────────────────
+    def build_longest_alternating(evts):
+        if not evts:
+            return []
+        n_e = len(evts)
+        dp   = [1] * n_e
+        prev = [-1] * n_e
+        for i in range(1, n_e):
+            for j in range(i - 1, -1, -1):
+                if evts[j][1] != evts[i][1] and dp[j] + 1 > dp[i]:
+                    dp[i]   = dp[j] + 1
+                    prev[i] = j
+        best_end = max(range(n_e), key=lambda i: (dp[i], i))
+        chain = []
+        idx = best_end
+        while idx != -1:
+            chain.append(evts[idx])
+            idx = prev[idx]
+        chain.reverse()
+        return chain
 
-    def pick_alternating_last5(evts):
-        selected, last_foot = [], None
-        for evt in reversed(evts):
-            if evt[1] != last_foot:
-                selected.append(evt)
-                last_foot = evt[1]
-                if len(selected) == 5:
-                    break
-        return list(reversed(selected))
+    alternating_pre_bfc = build_longest_alternating(pre_bfc_events)
+    print(f"  Longest alternating chain before BFC: {len(alternating_pre_bfc)} steps")
 
-    last5 = pick_alternating_last5(step_events)
-    if len(last5) < 5:
-        print(f"\n⚠️  Only {len(last5)} alternating steps found before release.")
-        return None
+    # ── Pick last 3 from the pre-BFC alternating chain ───────────────────────
+    steps_1_to_3 = alternating_pre_bfc[-3:] if len(alternating_pre_bfc) >= 3 else alternating_pre_bfc
+
+    if len(steps_1_to_3) < 3:
+        print(f"  ⚠️  Only {len(steps_1_to_3)} steps found before BFC "
+              f"(need 3) — padding with nearest available.")
+        # Pad from front with the earliest available, alternating foot where possible
+        while len(steps_1_to_3) < 3:
+            steps_1_to_3 = [steps_1_to_3[0]] + steps_1_to_3  # duplicate earliest as fallback
+
+    # ── Steps 4 and 5: always BFC and FFC from shared events ─────────────────
+    step4 = (bfc_frame, bfc_foot)
+    step5 = (ffc_frame, ffc_foot)
+
+    last5 = list(steps_1_to_3) + [step4, step5]
+
+    # Sanity check: enforce ascending frame order
+    for i in range(1, len(last5)):
+        if last5[i][0] <= last5[i-1][0]:
+            print(f"  ⚠️  Frame order issue at step {i+1}: "
+                  f"frame {last5[i][0]} <= {last5[i-1][0]} — check pre-BFC detection.")
 
     last5_frames = [s[0] for s in last5]
     foot_labels  = [s[1] for s in last5]
@@ -696,10 +888,13 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
 
     print(f"\n✅ Last 5 foot contacts (frames): {last5_frames}")
     print(f"   Feet: {[f.upper() for f in foot_labels]}")
+    print(f"   Step 4 = BFC : frame {bfc_frame}  ({bfc_foot} foot)  [FIXED]")
+    print(f"   Step 5 = FFC : frame {ffc_frame}  ({ffc_foot} foot)  [FIXED]")
     print(f"   Times (s): {[f'{t:.3f}' for t in times]}")
     print(f"   Duration (step 1→5): {duration:.3f} s")
     print(f"   Avg step interval:   {duration/4:.3f} s")
 
+    # ── Video annotation (unchanged from original) ────────────────────────────
     out_vid    = out_path("step_cadence_annotated.mp4")
     vw, ow, oh = sized_writer(out_vid, fps, width, height)
     step_foot_map = {last5_frames[i]: foot_labels[i] for i in range(5)}
@@ -744,6 +939,16 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
         if frame_idx in last5_frames:
             step_num = last5_frames.index(frame_idx) + 1
 
+        # Step label — mark step 4 and 5 as fixed
+        step_label = ""
+        if step_num == 4:
+            step_label = f">>> STEP 4/5  ({bfc_foot.upper()} FOOT) — BFC [FIXED] <<<"
+        elif step_num == 5:
+            step_label = f">>> STEP 5/5  ({ffc_foot.upper()} FOOT) — FFC [FIXED] <<<"
+        elif step_num:
+            step_label = (f">>> STEP {step_num}/5  "
+                          f"({step_foot_map[frame_idx].upper()} FOOT) <<<")
+
         bar_y  = oh - int(30 * OUTPUT_SCALE)
         bar_x0 = int(20 * OUTPUT_SCALE)
         bar_x1 = int((ow - 20) * OUTPUT_SCALE)
@@ -760,10 +965,9 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
                 f"Frame: {frame_idx}   Time: {frame_idx/fps:.2f}s",
                 f"Duration (5 steps): {duration:.3f}s",
                 f"Avg interval: {duration/4:.3f}s"]
-        if step_num:
-            foot_str = step_foot_map[frame_idx].upper()
-            info.insert(1, f">>> STEP {step_num}/5  ({foot_str} FOOT) <<<")
-            if step_num > 1:
+        if step_label:
+            info.insert(1, step_label)
+            if step_num and step_num > 1:
                 dt_step = (frame_idx - last5_frames[step_num-2]) / fps
                 info.append(f"Since last step: {dt_step:.3f}s")
         if frame_idx == release_frame:
@@ -788,7 +992,6 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
         "avg_interval_s": duration / 4,
         "intervals_s":    intervals_s,
     }
-
 # =============================================================================
 # ── SECTION 6 : MODULE 2 — DELIVERY STRIDE
 # =============================================================================
@@ -1431,10 +1634,8 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
     print(f"  Bowling arm  : {arm.upper()}")
     print(f"  Wrist column : {wrist_name}")
 
-    # Stabilise only non-bowling-arm joints
     stabilize_lr_non_bowling(df_xy.copy(), bowling_arm=arm)
 
-    # Always read bowling arm from original df_xy
     wx = smooth(df_xy[f"{arm}_wrist_x"].values.astype(float))
     wy = smooth(df_xy[f"{arm}_wrist_y"].values.astype(float))
     ex = smooth(df_xy[f"{arm}_elbow_x"].values.astype(float))
@@ -1735,7 +1936,7 @@ def build_frame_dataset(trial_id, df_xy, fps, cm_per_pixel,
         if all(np.isfinite(v) for v in (hx,hy,fax,fay)):
             raw_dx  = float(df_xy.loc[i,"videoDx_cm"])
             h_dx_cm = raw_dx if np.isfinite(raw_dx) else (hx-fax)*cm_per_pixel
-            h_dy_cm = (hy-fay)*cm_per_pixel
+            h_dy_cm = (fay - hy) * cm_per_pixel   # positive = head above ankle
             h_d_cm  = float(np.hypot(h_dx_cm,h_dy_cm))
         else:
             h_dx_cm = h_dy_cm = h_d_cm = np.nan
@@ -1895,7 +2096,7 @@ def main():
 
     df_xy, df_conf, fps, width, height, total_frames = extract_keypoints(VIDEO_PATH, model)
 
-    # ── Compute ALL shared events ONCE (upgraded release detection) ───────────
+    # ── Compute ALL shared events ONCE ───────────────────────────────────────
     events = detect_shared_events(df_xy, fps, bowling_wrist, video_path=VIDEO_PATH)
     print(f"\n🏏 Release frame: {events['release_frame']}  "
           f"({events['release_frame']/fps:.2f}s)  [{events['release_method']}]")
