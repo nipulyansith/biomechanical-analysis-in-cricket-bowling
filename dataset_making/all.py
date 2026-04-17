@@ -38,7 +38,7 @@ import openpyxl
 # =============================================================================
 # ── SETTINGS
 # =============================================================================
-VIDEO_PATH   = r"C:\Nipul\videos\B-09_T-09.MOV"
+VIDEO_PATH   = r"C:\Nipul\videos\B-03_T-07.MOV"
 MODEL_PATH   = "yolov8l-pose.pt"
 BASE_OUT_DIR = "output"
 
@@ -761,18 +761,20 @@ def draw_skeleton_full(img, kp_xy, scale=1.0, highlight_joints=None):
 # =============================================================================
 # ── SECTION 5 : MODULE 1 — STEP CADENCE  (BFC=step4, FFC=step5 fixed)
 # =============================================================================
+
 def run_step_cadence(df_xy, fps, events, video_path, width, height):
     """
     Step Cadence — BFC and FFC are always steps 4 and 5.
     ════════════════════════════════════════════════════════════════════════
-    Steps 1-3  are the last three foot contacts *before* BFC, found by the
-               3-pass peak detector (identical logic to the original Fix C,
-               but the search window is capped at bfc_frame - 1).
+    Steps 1-3  are the last three foot contacts *before* BFC, enforcing
+               strict alternation working BACKWARDS from BFC.
+
+               Required sequence (right-arm example):
+                 Step1=opposite(BFC), Step2=BFC_foot, Step3=opposite(BFC),
+                 Step4=BFC, Step5=FFC
 
     Step 4     = BFC frame  (from shared events — never moved)
     Step 5     = FFC frame  (from shared events — never moved)
-
-    Intervals and duration are computed over all 5 steps as before.
     """
     print("\n" + "─"*60)
     print("MODULE 1 — STEP CADENCE")
@@ -834,39 +836,92 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
     pre_bfc_events = merge_contact_clusters(step_events_raw, MIN_CLUSTER_GAP)
     print(f"  After cluster-merge (pre-BFC): {len(pre_bfc_events)} events")
 
-    # ── PASS 3: longest valid alternating sequence before BFC ────────────────
-    def build_longest_alternating(evts):
-        if not evts:
-            return []
-        n_e = len(evts)
-        dp   = [1] * n_e
-        prev = [-1] * n_e
-        for i in range(1, n_e):
-            for j in range(i - 1, -1, -1):
-                if evts[j][1] != evts[i][1] and dp[j] + 1 > dp[i]:
-                    dp[i]   = dp[j] + 1
-                    prev[i] = j
-        best_end = max(range(n_e), key=lambda i: (dp[i], i))
-        chain = []
-        idx = best_end
-        while idx != -1:
-            chain.append(evts[idx])
-            idx = prev[idx]
-        chain.reverse()
-        return chain
+    # ── PASS 3: enforce strict alternation working BACKWARDS from BFC ────────
+    #
+    # The required foot sequence ending at BFC must strictly alternate.
+    # We work backwards from BFC: step3 must be opposite(BFC_foot),
+    # step2 must be BFC_foot, step1 must be opposite(BFC_foot).
+    #
+    # Strategy:
+    #   1. From the pre-BFC candidate pool, pick the LAST contact whose foot
+    #      matches the required foot for step3 (opposite of BFC).
+    #   2. From candidates strictly before that, pick the LAST contact whose
+    #      foot matches step2 (same as BFC).
+    #   3. From candidates strictly before that, pick the LAST contact whose
+    #      foot matches step1 (opposite of BFC).
+    #
+    # This guarantees perfect alternation regardless of any duplicates in the
+    # detected peak list.
 
-    alternating_pre_bfc = build_longest_alternating(pre_bfc_events)
-    print(f"  Longest alternating chain before BFC: {len(alternating_pre_bfc)} steps")
+    def opposite(foot):
+        return "left" if foot == "right" else "right"
 
-    # ── Pick last 3 from the pre-BFC alternating chain ───────────────────────
-    steps_1_to_3 = alternating_pre_bfc[-3:] if len(alternating_pre_bfc) >= 3 else alternating_pre_bfc
+    # Required feet for steps 1, 2, 3 (working forward, derived from BFC foot)
+    # Step4=BFC_foot, so going back: step3=opp, step2=bfc, step1=opp
+    required_feet = [
+        opposite(bfc_foot),   # step 1
+        bfc_foot,             # step 2
+        opposite(bfc_foot),   # step 3
+    ]
 
+    def pick_last_before(candidates, max_frame_exclusive, required_foot):
+        """Return the last candidate (frame, foot) strictly before max_frame_exclusive
+        whose foot matches required_foot. Returns None if not found."""
+        matched = [(f, ft) for f, ft in candidates
+                   if ft == required_foot and f < max_frame_exclusive]
+        return matched[-1] if matched else None
+
+    # Pick step 3 first (closest to BFC), then step 2, then step 1
+    step3 = pick_last_before(pre_bfc_events, bfc_frame,              required_feet[2])
+    step2 = pick_last_before(pre_bfc_events, step3[0] if step3 else bfc_frame, required_feet[1])
+    step1 = pick_last_before(pre_bfc_events, step2[0] if step2 else bfc_frame, required_feet[0])
+
+    steps_1_to_3 = [s for s in [step1, step2, step3] if s is not None]
+
+    # ── Padding fallback if fewer than 3 steps found ─────────────────────────
+    # If a required step couldn't be found, we synthesise a plausible frame
+    # by spacing backward from the earliest found step (or from BFC) using
+    # the median detected step interval as a spacing estimate.
     if len(steps_1_to_3) < 3:
-        print(f"  ⚠️  Only {len(steps_1_to_3)} steps found before BFC "
-              f"(need 3) — padding with nearest available.")
-        # Pad from front with the earliest available, alternating foot where possible
-        while len(steps_1_to_3) < 3:
-            steps_1_to_3 = [steps_1_to_3[0]] + steps_1_to_3  # duplicate earliest as fallback
+        print(f"  ⚠️  Only {len(steps_1_to_3)} alternating steps found before BFC — padding.")
+
+        # Estimate a typical step interval from whatever we have + BFC
+        known_frames = [s[0] for s in steps_1_to_3] + [bfc_frame]
+        if len(known_frames) >= 2:
+            diffs = [known_frames[i+1] - known_frames[i]
+                     for i in range(len(known_frames)-1)]
+            est_interval = int(np.median(diffs))
+        else:
+            est_interval = max(6, int(0.20 * fps))
+
+        # Rebuild the full 3-step list from step3 backward
+        # We always anchor on whatever is closest to BFC first
+        anchor_frame = steps_1_to_3[-1][0] if steps_1_to_3 else bfc_frame
+        anchor_idx   = 2  # step3 index in required_feet
+
+        full_steps = [None, None, None]
+        for s in steps_1_to_3:
+            # Place each found step at its correct index based on foot
+            for idx_r, req_foot in enumerate(required_feet):
+                if s[1] == req_foot and full_steps[idx_r] is None:
+                    full_steps[idx_r] = s
+                    break
+
+        # Fill missing slots by extrapolating backward
+        # Work right-to-left: if slot i is None, estimate from slot i+1
+        # (or from bfc_frame for slot 2)
+        ref_frame = bfc_frame
+        for i in range(2, -1, -1):   # 2, 1, 0
+            if full_steps[i] is None:
+                next_frame = (full_steps[i+1][0] if i < 2 and full_steps[i+1] is not None
+                              else ref_frame)
+                synth_frame = max(1, next_frame - est_interval)
+                full_steps[i] = (synth_frame, required_feet[i])
+                print(f"     Synthesised step {i+1} @ frame {synth_frame} "
+                      f"({required_feet[i]} foot, interval={est_interval}f)")
+            ref_frame = full_steps[i][0]
+
+        steps_1_to_3 = full_steps
 
     # ── Steps 4 and 5: always BFC and FFC from shared events ─────────────────
     step4 = (bfc_frame, bfc_foot)
@@ -874,27 +929,32 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
 
     last5 = list(steps_1_to_3) + [step4, step5]
 
-    # Sanity check: enforce ascending frame order
-    for i in range(1, len(last5)):
-        if last5[i][0] <= last5[i-1][0]:
-            print(f"  ⚠️  Frame order issue at step {i+1}: "
-                  f"frame {last5[i][0]} <= {last5[i-1][0]} — check pre-BFC detection.")
-
     last5_frames = [s[0] for s in last5]
     foot_labels  = [s[1] for s in last5]
+
+    # ── Validation: report any foot-alternation violations ───────────────────
+    print(f"\n✅ Last 5 foot contacts (frames): {last5_frames}")
+    print(f"   Feet: {[f.upper() for f in foot_labels]}")
+    for i in range(1, 5):
+        if foot_labels[i] == foot_labels[i-1]:
+            print(f"   ⚠️  Alternation violation at step {i+1}: "
+                  f"{foot_labels[i-1].upper()} → {foot_labels[i].upper()} (same foot!)")
+    for i in range(1, 5):
+        if last5_frames[i] <= last5_frames[i-1]:
+            print(f"   ⚠️  Frame order issue at step {i+1}: "
+                  f"frame {last5_frames[i]} <= {last5_frames[i-1]}")
+
     times        = [f / fps for f in last5_frames]
     duration     = times[-1] - times[0]
     intervals_s  = [(last5_frames[i] - last5_frames[i-1]) / fps for i in range(1, 5)]
 
-    print(f"\n✅ Last 5 foot contacts (frames): {last5_frames}")
-    print(f"   Feet: {[f.upper() for f in foot_labels]}")
     print(f"   Step 4 = BFC : frame {bfc_frame}  ({bfc_foot} foot)  [FIXED]")
     print(f"   Step 5 = FFC : frame {ffc_frame}  ({ffc_foot} foot)  [FIXED]")
     print(f"   Times (s): {[f'{t:.3f}' for t in times]}")
     print(f"   Duration (step 1→5): {duration:.3f} s")
     print(f"   Avg step interval:   {duration/4:.3f} s")
 
-    # ── Video annotation (unchanged from original) ────────────────────────────
+    # ── Video annotation ──────────────────────────────────────────────────────
     out_vid    = out_path("step_cadence_annotated.mp4")
     vw, ow, oh = sized_writer(out_vid, fps, width, height)
     step_foot_map = {last5_frames[i]: foot_labels[i] for i in range(5)}
@@ -939,7 +999,6 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
         if frame_idx in last5_frames:
             step_num = last5_frames.index(frame_idx) + 1
 
-        # Step label — mark step 4 and 5 as fixed
         step_label = ""
         if step_num == 4:
             step_label = f">>> STEP 4/5  ({bfc_foot.upper()} FOOT) — BFC [FIXED] <<<"
