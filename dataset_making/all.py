@@ -20,6 +20,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from ultralytics import YOLO
 from scipy.signal import savgol_filter, find_peaks
+from pathlib import Path
 import subprocess
 import openpyxl
 
@@ -891,24 +892,75 @@ def detect_shared_events(df_xy, fps, bowling_wrist, video_path=None, pixels_per_
     """
     Compute ALL shared event frames ONCE.
     Release is now detected via detect_release_frame_biomech (upgraded).
+    BFC/FFC are derived from the same last-5-alternating-steps logic used in
+    run_step_cadence: the 4th step = BFC, the 5th step = FFC.
     """
     # ── Release (upgraded) ───────────────────────────────────────────────────
     release_idx, release_frame, release_method, release_confidence = detect_release_frame_biomech(
         df_xy, bowling_wrist, fps, video_path=video_path, pixels_per_meter=pixels_per_meter)
 
-    # ── FFC / BFC ────────────────────────────────────────────────────────────
+    # ── FFC / BFC via last-5-alternating-steps (mirrors run_step_cadence) ────
+    f_side = "left"  if bowling_wrist == "right_wrist" else "right"
+    b_side = "right" if f_side == "left" else "left"
+
+    # Smooth ankle signals
     for side in ("left", "right"):
         df_xy[f"{side}_ankle_y_s"] = smooth(
             df_xy[f"{side}_ankle_y"].values.astype(float))
 
-    f_side = "left"  if bowling_wrist == "right_wrist" else "right"
-    b_side = "right" if f_side == "left" else "left"
+    min_dist = max(6, int(0.20 * fps))
+    r_sig = smooth(df_xy["right_ankle_y"].values.astype(float))
+    l_sig = smooth(df_xy["left_ankle_y"].values.astype(float))
 
-    ffc_idx = _find_foot_contact_velocity(df_xy, f_side, release_idx, True)
-    bfc_idx = _find_foot_contact_velocity(df_xy, b_side, ffc_idx,     False)
+    r_peaks, _ = find_peaks(r_sig, distance=min_dist, prominence=20)
+    l_peaks, _ = find_peaks(l_sig, distance=min_dist, prominence=20)
 
-    ffc_frame = int(df_xy.loc[ffc_idx, "frame"])
-    bfc_frame = int(df_xy.loc[bfc_idx, "frame"])
+    ankle_frames = df_xy["frame"].values
+    step_events = (
+        [(int(ankle_frames[p]), "right") for p in r_peaks] +
+        [(int(ankle_frames[p]), "left")  for p in l_peaks]
+    )
+    step_events.sort(key=lambda x: x[0])
+    step_events = [s for s in step_events if s[0] <= release_frame]
+
+    # Inject FFC if peak-finder missed it (same fix as run_step_cadence Fix 4)
+    MERGE_TOLERANCE = 3
+    # We do a preliminary FFC via the old method only to seed injection if needed
+    _ffc_seed_idx = _find_foot_contact_velocity(df_xy, f_side, release_idx, True)
+    _ffc_seed_frame = int(df_xy.loc[_ffc_seed_idx, "frame"])
+    ffc_covered = any(abs(s[0] - _ffc_seed_frame) <= MERGE_TOLERANCE for s in step_events)
+    if not ffc_covered:
+        step_events.append((_ffc_seed_frame, f_side))
+        step_events.sort(key=lambda x: x[0])
+        print(f"  ℹ️  FFC seed frame {_ffc_seed_frame} injected into step events as {f_side} foot.")
+
+    def _pick_alternating_last5(evts):
+        selected, last_foot = [], None
+        for evt in reversed(evts):
+            if evt[1] != last_foot:
+                selected.append(evt)
+                last_foot = evt[1]
+                if len(selected) == 5:
+                    break
+        return list(reversed(selected))
+
+    last5 = _pick_alternating_last5(step_events)
+
+    if len(last5) >= 5:
+        bfc_frame = last5[3][0]   # 4th step = back foot contact
+        ffc_frame = last5[4][0]   # 5th step = front foot contact
+        print(f"  ✅ BFC from 4th alternating step: frame {bfc_frame}")
+        print(f"  ✅ FFC from 5th alternating step: frame {ffc_frame}")
+    else:
+        # Fallback to velocity method if fewer than 5 steps found
+        print(f"  ⚠️  Only {len(last5)} alternating steps found — falling back to velocity method.")
+        ffc_idx_fb  = _find_foot_contact_velocity(df_xy, f_side, release_idx, True)
+        bfc_idx_fb  = _find_foot_contact_velocity(df_xy, b_side, ffc_idx_fb, False)
+        ffc_frame   = int(df_xy.loc[ffc_idx_fb, "frame"])
+        bfc_frame   = int(df_xy.loc[bfc_idx_fb, "frame"])
+
+    bfc_idx = df_xy[df_xy["frame"] == bfc_frame].index[0]
+    ffc_idx = df_xy[df_xy["frame"] == ffc_frame].index[0]
 
     # ── Arm-back frame ───────────────────────────────────────────────────────
     # Arm-back = arm at highest/back position, so wrist is at TOP of frame (minimum Y)
@@ -2156,11 +2208,12 @@ def print_summary(hand, events, r_stride, r_cadence, r_elbow, r_knee, r_head, r_
 # =============================================================================
 def _safe_read_excel(path, expected_cols):
     if not os.path.exists(path):
+        print(f"  📄 Creating new Excel file: {path}")
         return pd.DataFrame(columns=expected_cols)
     try:
-        df = pd.read_excel(path, dtype=str)
-        for col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="ignore")
+        # Read without forcing dtype - let pandas preserve original data types
+        df = pd.read_excel(path)
+        print(f"  📖 Read existing file: {path} with {len(df)} rows")
         return df
     except Exception as e:
         print(f"  ⚠️  Could not read {path}: {e} — starting fresh.")
@@ -2169,8 +2222,12 @@ def _safe_read_excel(path, expected_cols):
 def _safe_write_excel(df, path):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     try:
+        # First, verify we have data to write
+        rows_to_write = len(df)
+        print(f"  ✍️  Writing {rows_to_write} rows to {path}")
+        
         df.to_excel(path, index=False, engine="openpyxl")
-        print(f"  💾  Saved → {path}  ({len(df)} rows)")
+        print(f"  ✅ Successfully saved {path} with {rows_to_write} rows")
     except PermissionError:
         fallback = path.replace(".xlsx",
             f"_backup_{datetime.datetime.now().strftime('%H%M%S')}.xlsx")
@@ -2259,11 +2316,41 @@ def build_frame_dataset(trial_id, df_xy, fps, cm_per_pixel,
     return pd.DataFrame(rows, columns=FRAME_COLS)
 
 def write_frame_dataset(df_new_frames, trial_id, path):
-    print(f"\n📋 Updating frame dataset → {path}")
+    print(f"\n📋 Processing frame data for trial: {trial_id}")
+    print(f"   Path: {path}")
+    print(f"   New rows to add: {len(df_new_frames)}")
+    
+    # Read all existing data
     df_existing = _safe_read_excel(path, FRAME_COLS)
-    df_existing = _drop_existing_trial(df_existing, trial_id)
-    df_combined = pd.concat([df_existing, df_new_frames], ignore_index=True)
+    print(f"   Existing rows in file: {len(df_existing)}")
+    
+    # Ensure no duplicate columns - keep only FRAME_COLS
+    df_new_frames = df_new_frames[FRAME_COLS]
+    
+    # IMPORTANT: Remove any existing rows with the same trial_id to avoid duplicates
+    # This allows re-running the same trial to update its data
+    if len(df_existing) > 0:
+        rows_before_removal = len(df_existing)
+        df_existing = df_existing[df_existing['trial_id'] != trial_id]
+        rows_removed = rows_before_removal - len(df_existing)
+        if rows_removed > 0:
+            print(f"   ⚠️  Removed {rows_removed} existing rows for trial_id '{trial_id}'")
+    
+    # Combine: existing data FIRST, then new data
+    if len(df_existing) > 0:
+        df_combined = pd.concat([df_existing, df_new_frames], ignore_index=True, sort=False)
+        print(f"   Combined total: {len(df_combined)} rows")
+    else:
+        df_combined = df_new_frames.copy()
+        print(f"   No existing data, using new data only")
+    
+    # Sort by trial_id and frame for better organization
+    if 'frame' in df_combined.columns:
+        df_combined = df_combined.sort_values(['trial_id', 'frame'], ignore_index=True)
+    
+    # Write combined data
     _safe_write_excel(df_combined, path)
+    print(f"   ✅ Frame dataset updated successfully! Total rows now: {len(df_combined)}")
 
 # =============================================================================
 # ── SECTION 14 : MASTER DATASET WRITER
@@ -2350,12 +2437,82 @@ def build_master_row(trial_id, fps, hand, events,
     }
 
 def write_master_dataset(master_row, trial_id, path):
-    print(f"\n📋 Updating master dataset → {path}")
+    print(f"\n📋 Processing master data for trial: {trial_id}")
+    print(f"   Path: {path}")
+    
+    # Read all existing data
     df_existing = _safe_read_excel(path, MASTER_COLS)
-    df_existing = _drop_existing_trial(df_existing, trial_id)
-    df_new      = pd.DataFrame([master_row], columns=MASTER_COLS)
-    df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+    print(f"   Existing rows in file: {len(df_existing)}")
+    
+    # Create new row dataframe
+    df_new = pd.DataFrame([master_row], columns=MASTER_COLS)
+    
+    # IMPORTANT: Remove any existing rows with the same trial_id to avoid duplicates
+    # This allows re-running the same trial to update its data
+    if len(df_existing) > 0:
+        rows_before_removal = len(df_existing)
+        df_existing = df_existing[df_existing['trial_id'] != trial_id]
+        rows_removed = rows_before_removal - len(df_existing)
+        if rows_removed > 0:
+            print(f"   ⚠️  Replaced existing row for trial_id '{trial_id}'")
+    
+    # Combine: existing data FIRST, then new data
+    if len(df_existing) > 0:
+        df_combined = pd.concat([df_existing, df_new], ignore_index=True, sort=False)
+        print(f"   Combined total: {len(df_combined)} rows (appended new trial)")
+    else:
+        df_combined = df_new.copy()
+        print(f"   No existing data, starting new dataset")
+    
+    # Sort by trial_id for better organization
+    df_combined = df_combined.sort_values(['trial_id'], ignore_index=True)
+    
+    # Write combined data
     _safe_write_excel(df_combined, path)
+    print(f"   ✅ Master dataset updated successfully! Total rows now: {len(df_combined)}")
+
+# =============================================================================
+# ── DATASET STATUS UTILITY
+# =============================================================================
+def display_dataset_status(dataset_making_dir=None):
+    """Display the current status of the accumulated dataset"""
+    if dataset_making_dir is None:
+        dataset_making_dir = Path(__file__).parent
+    
+    frames_path = dataset_making_dir / "frames.xlsx"
+    master_path = dataset_making_dir / "master.xlsx"
+    
+    print(f"\n{'='*70}")
+    print(f"📊 DATASET STATUS")
+    print(f"{'='*70}")
+    
+    # Check frames.xlsx
+    if frames_path.exists():
+        df_frames = _safe_read_excel(str(frames_path), FRAME_COLS)
+        if len(df_frames) > 0:
+            unique_trials = df_frames['trial_id'].unique()
+            print(f"\n📋 Frames Dataset: {frames_path.name}")
+            print(f"   Total frames: {len(df_frames)}")
+            print(f"   Unique trials: {len(unique_trials)}")
+            print(f"   Trials: {', '.join(sorted(unique_trials))}")
+        else:
+            print(f"\n📋 Frames Dataset: {frames_path.name} (empty)")
+    else:
+        print(f"\n📋 Frames Dataset: NOT CREATED YET")
+    
+    # Check master.xlsx
+    if master_path.exists():
+        df_master = _safe_read_excel(str(master_path), MASTER_COLS)
+        if len(df_master) > 0:
+            print(f"\n📋 Master Dataset: {master_path.name}")
+            print(f"   Total trials: {len(df_master)}")
+            print(f"   Trials: {', '.join(sorted(df_master['trial_id'].unique()))}")
+        else:
+            print(f"\n📋 Master Dataset: {master_path.name} (empty)")
+    else:
+        print(f"\n📋 Master Dataset: NOT CREATED YET")
+    
+    print(f"\n{'='*70}\n")
 
 # =============================================================================
 # ── MAIN

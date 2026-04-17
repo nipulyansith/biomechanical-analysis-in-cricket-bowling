@@ -87,14 +87,59 @@ SESSIONS = {}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def create_session():
+def resolve_unique_video_name(video_name_base):
+    """
+    Ensure video name is unique by adding a number suffix if needed.
+    e.g., "My Video" becomes "My Video" if not exists, else "My Video 2", "My Video 3", etc.
+    """
+    if not video_name_base:
+        return None
+    
+    # Clean the name
+    video_name_base = str(video_name_base).strip()
+    if not video_name_base:
+        return None
+    
+    # Check if folder already exists
+    result_path = RESULTS_DIR / video_name_base
+    if not result_path.exists():
+        return video_name_base
+    
+    # Find a unique name with a number suffix
+    counter = 2
+    while True:
+        unique_name = f"{video_name_base} {counter}"
+        result_path = RESULTS_DIR / unique_name
+        if not result_path.exists():
+            return unique_name
+        counter += 1
+
+def get_session_path(session_id):
+    """Get the results path for a session, using result_folder if available"""
+    if session_id in SESSIONS:
+        result_folder = SESSIONS[session_id].get('result_folder', session_id)
+    else:
+        result_folder = session_id
+    return RESULTS_DIR / result_folder
+
+def create_session(video_name=None):
     """Create a new analysis session"""
     session_id = str(uuid.uuid4())[:8]
-    session_path = RESULTS_DIR / session_id
+    
+    # Resolve unique video name if provided
+    unique_video_name = None
+    if video_name:
+        unique_video_name = resolve_unique_video_name(video_name)
+    
+    # Use video name as folder name if available, otherwise use session_id
+    result_folder = unique_video_name if unique_video_name else session_id
+    session_path = RESULTS_DIR / result_folder
     session_path.mkdir(exist_ok=True)
     
     SESSIONS[session_id] = {
         'id': session_id,
+        'video_name': unique_video_name,
+        'result_folder': result_folder,
         'created_at': datetime.now().isoformat(),
         'video_path': None,
         'bowling_arm': None,
@@ -140,7 +185,8 @@ def api_delete_session(session_id):
         return jsonify({'success': False, 'error': 'Session not found'}), 404
     
     try:
-        session_path = RESULTS_DIR / session_id
+        result_folder = SESSIONS[session_id].get('result_folder', session_id)
+        session_path = RESULTS_DIR / result_folder
         if session_path.exists():
             shutil.rmtree(session_path)
         del SESSIONS[session_id]
@@ -156,8 +202,11 @@ def api_list_sessions():
         
         # Get sessions from memory
         for session_id, session in SESSIONS.items():
+            # Use video_name for display if available, otherwise use result_folder
+            display_name = session.get('video_name') or session.get('result_folder', session_id)
             session_data = {
                 'session_id': session_id,
+                'display_name': display_name,
                 'created_at': session.get('created_at'),
                 'status': session.get('status'),
                 'bowling_arm': session.get('bowling_arm'),
@@ -169,9 +218,9 @@ def api_list_sessions():
         if RESULTS_DIR.exists():
             for session_dir in RESULTS_DIR.iterdir():
                 if session_dir.is_dir():
-                    session_id = session_dir.name
+                    folder_name = session_dir.name
                     # Skip if already in memory
-                    if session_id in SESSIONS:
+                    if any(s['result_folder'] == folder_name for s in [SESSIONS.get(sid) for sid in SESSIONS]):
                         continue
                     
                     # Try to load from disk
@@ -195,7 +244,8 @@ def api_list_sessions():
                                 }
                             
                             session_data = {
-                                'session_id': session_id,
+                                'session_id': folder_name,
+                                'display_name': folder_name,
                                 'created_at': analysis_data.get('timestamp', session_dir.stat().st_mtime),
                                 'status': 'completed',
                                 'bowling_arm': analysis_data.get('bowling_arm'),
@@ -259,6 +309,26 @@ def api_upload_video(session_id):
         return jsonify({'success': False, 'error': 'File too large'}), 400
     
     try:
+        # Check if video_name was provided in the upload
+        video_name = request.form.get('video_name', '').strip() if 'video_name' in request.form else None
+        
+        # If video_name provided but session doesn't have one, update the result folder
+        if video_name and not SESSIONS[session_id]['video_name']:
+            unique_video_name = resolve_unique_video_name(video_name)
+            if unique_video_name:
+                # Move/create the new result folder
+                old_folder = RESULTS_DIR / SESSIONS[session_id]['result_folder']
+                new_folder = RESULTS_DIR / unique_video_name
+                
+                if old_folder.exists() and not new_folder.exists():
+                    old_folder.rename(new_folder)
+                    SESSIONS[session_id]['video_name'] = unique_video_name
+                    SESSIONS[session_id]['result_folder'] = unique_video_name
+                elif not new_folder.exists():
+                    new_folder.mkdir(exist_ok=True)
+                    SESSIONS[session_id]['video_name'] = unique_video_name
+                    SESSIONS[session_id]['result_folder'] = unique_video_name
+        
         # Save video
         filename = secure_filename(f"{session_id}_{datetime.now().timestamp()}.{file.filename.rsplit('.', 1)[1].lower()}")
         video_path = UPLOAD_DIR / filename
@@ -295,7 +365,7 @@ def api_upload_video(session_id):
         }), 200
     
     except Exception as e:
-        if video_path.exists():
+        if 'video_path' in locals() and video_path.exists():
             video_path.unlink()
         return jsonify({'success': False, 'error': f'Upload failed: {str(e)}'}), 500
 
@@ -350,7 +420,8 @@ def api_calibration_preview(session_id):
             return jsonify({'success': False, 'error': 'Could not read first frame'}), 500
         
         # Save preview image
-        preview_path = RESULTS_DIR / session_id / 'calibration_preview.jpg'
+        session_path = get_session_path(session_id)
+        preview_path = session_path / 'calibration_preview.jpg'
         cv2.imwrite(str(preview_path), frame)
         
         return send_file(str(preview_path), mimetype='image/jpeg'), 200
@@ -462,7 +533,8 @@ def process_video_async(session_id):
         # Prepare parameters
         video_path = session['video_path']
         bowling_arm = session['bowling_arm']
-        session_path = RESULTS_DIR / session_id
+        result_folder = session.get('result_folder', session_id)
+        session_path = RESULTS_DIR / result_folder
         
         # Create working directory
         work_dir = session_path / "work"
@@ -477,6 +549,7 @@ def process_video_async(session_id):
         print(f"🎬 Video copied to working directory: {work_video}")
         print(f"📊 Calibration Top: {session['calibration_top']}")
         print(f"📊 Calibration Bottom: {session['calibration_bottom']}")
+        print(f"📁 Results folder: {result_folder}")
         
         # Run analysis with progress updates
         session['progress'] = 30
@@ -513,10 +586,15 @@ def run_analysis(session_id, video_path, bowling_arm, calibration_top,
                   calibration_bottom, output_dir):
     """Run the biomechanics analysis using wrapper script"""
     
+    # Get the trial_id (video name / result folder name) from session
+    session = SESSIONS.get(session_id)
+    trial_id = session.get('result_folder', session_id) if session else session_id
+    
     print(f"\n{'='*60}")
     print(f"Starting biomechanics analysis")
     print(f"{'='*60}")
     print(f"Session ID: {session_id}")
+    print(f"Trial ID: {trial_id}")
     print(f"Video: {video_path}")
     print(f"Bowling arm: {bowling_arm}")
     print(f"Calibration top: {calibration_top}")
@@ -536,7 +614,8 @@ def run_analysis(session_id, video_path, bowling_arm, calibration_top,
         '--session-id', session_id,
         '--output-dir', output_dir,
         '--calib-top', f"{calibration_top[0]},{calibration_top[1]}",
-        '--calib-bottom', f"{calibration_bottom[0]},{calibration_bottom[1]}"
+        '--calib-bottom', f"{calibration_bottom[0]},{calibration_bottom[1]}",
+        '--trial-id', trial_id
     ]
     
     print(f"\n🚀 Running command: {' '.join(cmd)}\n")
@@ -562,7 +641,9 @@ def run_analysis(session_id, video_path, bowling_arm, calibration_top,
 
 def collect_results(session_id):
     """Collect all results from output directory"""
-    session_path = RESULTS_DIR / session_id
+    session = SESSIONS.get(session_id)
+    result_folder = session.get('result_folder', session_id) if session else session_id
+    session_path = RESULTS_DIR / result_folder
     results = {
         'stride_duration': None,
         'delivery_stride': None,
@@ -743,7 +824,7 @@ def api_get_results(session_id):
         }), 200
     
     # If not in memory, try loading from disk
-    session_path = RESULTS_DIR / session_id
+    session_path = get_session_path(session_id)
     analysis_file = session_path / "analysis_results.json"
     
     if not analysis_file.exists():
@@ -852,7 +933,7 @@ def api_download_file(session_id, file_type):
     if session_id not in SESSIONS:
         return jsonify({'success': False, 'error': 'Session not found'}), 404
     
-    session_path = RESULTS_DIR / session_id
+    session_path = get_session_path(session_id)
     
     file_map = {
         'elbow_csv': 'elbow_full_analysis.csv',
@@ -882,7 +963,7 @@ def api_download_file(session_id, file_type):
 @app.route('/api/results/<session_id>/image/<image_name>', methods=['GET'])
 def api_get_image(session_id, image_name):
     """Get analysis image"""
-    session_path = RESULTS_DIR / session_id
+    session_path = get_session_path(session_id)
     image_path = session_path / image_name
     
     if not image_path.exists():
@@ -976,7 +1057,7 @@ def api_get_keypoints(session_id):
 @app.route('/api/results/<session_id>/keypoint-frame/<frame_label>', methods=['GET'])
 def api_get_keypoint_frame(session_id, frame_label):
     """Get annotated keypoint frame image"""
-    session_path = RESULTS_DIR / session_id
+    session_path = get_session_path(session_id)
     keypoint_samples_dir = session_path / "keypoint_samples"
     
     # Find the frame file matching the label

@@ -116,11 +116,20 @@ class FastBowlAPI {
     /**
      * Upload video file
      */
-    async uploadVideo(file, onProgress = null) {
+    async uploadVideo(file, videoName = '', onProgress = null) {
         if (!this.sessionId) throw new Error('No session ID');
+        
+        // Handle function overloading - if second param is a function, it's the old API
+        if (typeof videoName === 'function') {
+            onProgress = videoName;
+            videoName = '';
+        }
         
         const formData = new FormData();
         formData.append('video', file);
+        if (videoName) {
+            formData.append('video_name', videoName);
+        }
         
         try {
             const xhr = new XMLHttpRequest();

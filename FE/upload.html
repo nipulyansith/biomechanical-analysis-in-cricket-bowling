@@ -101,11 +101,28 @@
     <input type="hidden" id="selected-hand" value="R"/>
   </section>
 
+  <!-- Step 1.5: Video Name -->
+  <section class="mb-8">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-7 h-7 rounded-full bg-tertiary flex items-center justify-center">
+        <span class="font-label text-on-tertiary text-xs font-bold">1.5</span>
+      </div>
+      <h3 class="font-headline text-lg font-semibold">Video Name</h3>
+    </div>
+    <p class="font-body text-on-surface-variant text-sm mb-4">Give this video a descriptive name so you can easily find it later.</p>
+    <div class="relative">
+      <input type="text" id="video-name-input" placeholder="e.g., Fast Bowler Run-up Analysis" 
+        class="w-full px-4 py-3 rounded-2xl border border-outline-variant bg-surface-container-low text-on-surface placeholder-on-surface-variant focus:outline-none focus:border-tertiary transition-colors font-body text-base"
+        onkeyup="updateSubmit()"/>
+      <p class="font-label text-xs text-on-surface-variant mt-2">Optional • If left blank, a default name will be assigned</p>
+    </div>
+  </section>
+
   <!-- Step 2: Video Upload / Camera -->
   <section class="mb-8">
     <div class="flex items-center gap-3 mb-4">
       <div class="w-7 h-7 rounded-full bg-tertiary flex items-center justify-center">
-        <span class="font-label text-on-tertiary text-xs font-bold">2</span>
+        <span class="font-label text-on-tertiary text-xs font-bold">3</span>
       </div>
       <h3 class="font-headline text-lg font-semibold">Add Video</h3>
     </div>
@@ -379,6 +396,7 @@ function updateSubmit() {
 async function submitUpload() {
   if (!selectedFile || !API.sessionId) return;
   const hand = document.getElementById('selected-hand').value;
+  const videoName = document.getElementById('video-name-input').value.trim();
   const btn  = document.getElementById('submit-btn');
   const errEl = document.getElementById('submit-error');
 
@@ -387,8 +405,8 @@ async function submitUpload() {
   errEl.classList.add('hidden');
 
   try {
-    // Upload video
-    await API.uploadVideo(selectedFile, (percent) => {
+    // Upload video with name
+    await API.uploadVideo(selectedFile, videoName, (percent) => {
       btn.innerHTML = `<span class="material-symbols-outlined animate-spin">sync</span> Uploading… ${Math.round(percent)}%`;
     });
 

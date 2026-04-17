@@ -21,6 +21,7 @@ def main():
     parser.add_argument('--output-dir', required=True, help='Output directory')
     parser.add_argument('--calib-top', required=True, help='Calibration top point (x,y)')
     parser.add_argument('--calib-bottom', required=True, help='Calibration bottom point (x,y)')
+    parser.add_argument('--trial-id', default='', help='Optional trial ID for Excel files (defaults to video filename)')
     
     args = parser.parse_args()
     
@@ -118,8 +119,9 @@ def main():
         # Step 5: Build and write Excel datasets
         print(f"\n📊 Building and writing Excel datasets...")
         
-        # Get trial ID from video filename
-        trial_id = Path(args.video).stem
+        # Get trial ID - use provided trial_id or default to video filename
+        trial_id = args.trial_id if args.trial_id else Path(args.video).stem
+        print(f"📝 Trial ID for Excel files: {trial_id}")
         
         # Pre-calculate bowling_arm_name like in all.py
         bowling_arm_name = "right" if args.hand == "R" else "left"
@@ -149,8 +151,11 @@ def main():
         # Write frame dataset to Excel file in dataset_making folder
         dataset_making_dir = Path(__file__).parent
         frames_excel_path = dataset_making_dir / "frames.xlsx"
+        print(f"\n📊 Writing frame dataset...")
+        print(f"   Path: {frames_excel_path}")
+        print(f"   New rows: {len(df_frames)}")
         write_frame_dataset(df_frames, trial_id, str(frames_excel_path))
-        print(f"✅ Frame dataset written to: {frames_excel_path}")
+        print(f"✅ Frame dataset operation complete!")
         
         # Build master row
         master_row = build_master_row(
@@ -168,8 +173,11 @@ def main():
         
         # Write master dataset to Excel file in dataset_making folder
         master_excel_path = dataset_making_dir / "master.xlsx"
+        print(f"\n📊 Writing master dataset...")
+        print(f"   Path: {master_excel_path}")
+        print(f"   New rows: 1")
         write_master_dataset(master_row, trial_id, str(master_excel_path))
-        print(f"✅ Master dataset written to: {master_excel_path}")
+        print(f"✅ Master dataset operation complete!")
         
         # Step 6: Save results - clean up dataframes before JSON serialization
         print(f"\n💾 Saving results...")
@@ -261,6 +269,13 @@ def main():
             json.dump(results_summary, f, indent=2, default=str)
         
         print(f"✅ Results saved to {output_dir / 'analysis_results.json'}")
+        
+        # Display current dataset status
+        print(f"\n{'='*60}")
+        print(f"📊 DISPLAYING ACCUMULATED DATASET STATUS")
+        print(f"{'='*60}")
+        all_module.display_dataset_status(dataset_making_dir)
+        
         print(f"\n✨ Analysis completed successfully!")
         return 0
         
