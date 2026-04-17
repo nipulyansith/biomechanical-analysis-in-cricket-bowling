@@ -1,51 +1,31 @@
 """
-Cricket Bowling Annotation Tool  (v5 — fixed)
+Cricket Bowling Annotation Tool  (v6 — fixed)
 ==============================================
 Creates ground_truth.csv matching master.xlsx structure for biomechanics evaluation.
 
-FIXES vs v4
-───────────
-  FIX 7 — Frame numbering is now 1-based, matching the model pipeline.
-           The model builds its dataframe with frame_no starting at 1
-           (it increments before storing: frame_no += 1).
-           Previously the GT annotator used 0-based seeking, so "frame 113"
-           in GT referred to a different physical frame than "frame 113" in
-           the model. Now both use 1-based numbering and refer to the same
-           physical frame.
+FIX 8 (this version)
+─────────────────────
+  cap.set(CAP_PROP_POS_FRAMES) is no longer used for navigation.
+  On MOV/H.264 files it snaps to the nearest keyframe but cap.get()
+  still reports the *requested* position — so frame 606 in the annotator
+  was visually showing frame 604 (or similar offset) from the pipeline.
 
-           Implementation:
-             _seek_idx  — private, 0-based, used only for cap.set()
-             frame_idx  — public, 1-based (= _seek_idx + 1), used for
-                          display, event storage, and CSV output.
-           Navigation arithmetic operates on _seek_idx internally so
-           frame 1 is always the first physical frame of the video.
+  _read_frame() now seeks by re-opening the video and advancing with
+  cap.grab() (no decode) from position 0.  This is the same approach used
+  in the fixed bowling pipeline (_open_and_advance), so all three tools
+  — pipeline, annotator, evaluation — now refer to the same physical frame
+  when they say "frame N".
 
-FIXES vs v3 (carried forward)
+  Performance note: grab() is fast (no decode).  For a typical delivery
+  clip the seek target is rarely beyond frame 700, so the grab loop
+  completes in well under a second.
+
+FIXES vs v5 (carried forward)
 ──────────────────────────────
-  FIX 5 — knee_angle_ffc_deg / knee_angle_release_deg
-           Now uses FRONT knee only (left for R-arm, right for L-arm),
-           matching Code 2's KneeLockTracker which tracks front knee only.
-           Previously averaged both knees — different from model.
-
-  FIX 6 — head_dx/dy/d_bfc_cm
-           Reference ankle at BFC is now the FRONT ankle (same side as FFC),
-           matching Code 2's run_head_position() which uses front_ankle at
-           all event frames. Previously used back ankle — different from model.
-
-UI IMPROVEMENTS (carried forward)
-───────────────────────────────────
-  • All text scaled up for readability
-  • Instruction panel moved to TOP of video (left-aligned, does not cover centre)
-  • "What to do next" instruction always shown at top-right
-  • Progress bar moved to bottom to free up top edge for instructions
-  • Keypoint dots and labels enlarged
-
-FIXES vs v2 (carried forward)
-──────────────────────────────
-  FIX 1 — knee_angle_release_deg: same-frame keypoints from release phase
-  FIX 2 — head_dx_bfc_cm: uses BFC-frame head, not FFC
-  FIX 3 — stride_duration_s: BFC → FFC (not BFC → Release)
-  FIX 4 — head centroid averages all available face keypoints
+  FIX 7 — Frame numbering is 1-based, matching the model pipeline.
+  FIX 5 — knee angles use FRONT knee only (matching KneeLockTracker).
+  FIX 6 — head_bfc reference is FRONT ankle at BFC (matching model).
+  FIX 1-4 — carried forward from v2/v3.
 
 NAVIGATION
 ──────────
@@ -104,17 +84,54 @@ COL_TEXT   = (255, 255, 255)
 COL_WARN   = (0,   0,   255)
 COL_OK     = (0,   220, 80 )
 
-# UI text sizes — bumped up from v3
-TEXT_SCALE       = 0.72   # main HUD text (was 0.60)
+# UI text sizes
+TEXT_SCALE       = 0.72
 TEXT_THICK       = 1
-LEGEND_SCALE     = 0.62   # bottom legend (was 0.52)
-KP_LABEL_SCALE   = 0.52   # keypoint labels (was 0.42)
-NEXT_SCALE       = 0.75   # "next action" instruction text
-KP_RADIUS        = 8      # keypoint dot radius (was 6)
+LEGEND_SCALE     = 0.62
+KP_LABEL_SCALE   = 0.52
+NEXT_SCALE       = 0.75
+KP_RADIUS        = 8
 
 # Layout
-ROW_H   = 34   # HUD row height (was 28)
-PAD     = 5    # text background padding (was 4)
+ROW_H   = 34
+PAD     = 5
+
+
+# ─────────────────────────────────────────────────────────────
+#  FIX 8: grab()-based frame-accurate seek helper
+# ─────────────────────────────────────────────────────────────
+def _grab_seek(cap: cv2.VideoCapture, video_path: str,
+               target_0based: int, total_frames: int) -> bool:
+    """
+    Seek to target_0based (0-indexed) by re-opening the video and advancing
+    with cap.grab() from position 0.
+
+    Why not cap.set(CAP_PROP_POS_FRAMES)?
+      On MOV/H.264 it snaps to the nearest keyframe but cap.get() still
+      reports the *requested* position, so the offset is silent and
+      undetectable.  grab() decodes no pixels and is fast enough for
+      interactive use (<1 s for a 700-frame seek).
+
+    Modifies cap in-place by releasing and re-opening it so the internal
+    position counter is always accurate.
+    Returns True on success.
+    """
+    target_0based = max(0, min(target_0based, total_frames - 1))
+
+    # Re-open to reset the internal state cleanly
+    cap.release()
+    cap.open(video_path)
+    if not cap.isOpened():
+        cap.open(video_path, cv2.CAP_FFMPEG)
+    if not cap.isOpened():
+        return False
+
+    # Advance by grabbing (no decode) the required number of frames
+    for _ in range(target_0based):
+        if not cap.grab():
+            break
+
+    return True
 
 
 # ─────────────────────────────────────────────────────────────
@@ -133,7 +150,6 @@ def put_text(img, text, pos, scale=TEXT_SCALE, color=COL_TEXT, thickness=TEXT_TH
 
 def put_text_right(img, text, right_x, y, scale=TEXT_SCALE,
                    color=COL_TEXT, thickness=TEXT_THICK):
-    """Render text right-aligned at right_x."""
     font = cv2.FONT_HERSHEY_SIMPLEX
     (tw, th), bl = cv2.getTextSize(text, font, scale, thickness)
     x = right_x - tw
@@ -153,18 +169,13 @@ def draw_panel(img, lines, x0=8, y0=14, row_h=ROW_H):
 
 
 # ─────────────────────────────────────────────────────────────
-#  "What to do next" instruction box — top RIGHT, never centre
+#  "What to do next" instruction box — top RIGHT
 # ─────────────────────────────────────────────────────────────
 def draw_next_instruction(img, session, calib_mode: bool):
-    """
-    Single-line instruction telling the annotator exactly what to do next.
-    Rendered top-right so it never covers the bowler in the centre of frame.
-    """
     h, w = img.shape[:2]
     s = session
     ev = s.events
 
-    # Determine the next required action
     if calib_mode:
         msg   = "CALIB: click STUMP TOP then STUMP BOTTOM"
         color = COL_CALIB
@@ -200,7 +211,6 @@ def draw_next_instruction(img, session, calib_mode: bool):
         msg   = "ALL DONE — press S to save"
         color = COL_OK
 
-    # Draw right-aligned, 16px from top, 16px from right edge
     right_x = w - 16
     put_text_right(img, msg, right_x, 28, scale=NEXT_SCALE, color=color)
 
@@ -340,14 +350,6 @@ class AnnotationSession:
 
     # ── metric computation ───────────────────────────────────
     def compute(self, bowling_arm: str = "R", view_mode: str = "SIDE") -> dict:
-        """
-        FIX 1 — knee_angle_release_deg: same-frame keypoints from release phase.
-        FIX 2 — head_dx_bfc_cm: BFC-frame head (not FFC).
-        FIX 3 — stride_duration_s: BFC → FFC.
-        FIX 4 — head centroid averages all available face keypoints.
-        FIX 5 — knee angles use FRONT knee only (matching model's KneeLockTracker).
-        FIX 6 — head_bfc reference is FRONT ankle at BFC (matching model).
-        """
         e   = self.events
         kp  = self.keypoints
         fps = self.fps
@@ -386,13 +388,13 @@ class AnnotationSession:
             out["step_duration_cv"]        = None
             out["final5_total_duration_s"] = None
 
-        # ── Stride duration (BFC → FFC)  [FIX 3] ────────────
+        # ── Stride duration (BFC → FFC) ──────────────────────
         if e["ffc_frame"] is not None and e["bfc_frame"] is not None:
             out["stride_duration_s"] = (e["ffc_frame"] - e["bfc_frame"]) / fps
         else:
             out["stride_duration_s"] = None
 
-        # ── Stride length (back ankle@BFC → front ankle@FFC) ─
+        # ── Stride length ─────────────────────────────────────
         if bowling_arm == "R":
             f_ankle = kp["ffc"].get("left_ankle")
             b_ankle = kp["bfc"].get("right_ankle")
@@ -428,9 +430,7 @@ class AnnotationSession:
             (a_rel - a_ab) if (a_ab is not None and a_rel is not None) else None
         )
 
-        # ── Knee angles — FRONT knee only  [FIX 5] ───────────
-        # Front knee: left for R-arm bowler, right for L-arm.
-        # Matches Code 2's KneeLockTracker which tracks front knee only.
+        # ── Knee angles — FRONT knee only ────────────────────
         if bowling_arm == "R":
             out["knee_angle_ffc_deg"] = angle_3pts(
                 kp["ffc"].get("left_hip"),
@@ -450,7 +450,7 @@ class AnnotationSession:
                 kp["release"].get("right_knee"),
                 kp["release"].get("right_ankle"))
 
-        # ── Head @ FFC relative to front ankle  [FIX 4] ──────
+        # ── Head @ FFC relative to front ankle ───────────────
         head_ffc = head_centroid(kp["ffc"])
         if bowling_arm == "R":
             f_ankle_ffc = kp["ffc"].get("left_ankle")
@@ -468,10 +468,7 @@ class AnnotationSession:
         else:
             out["head_dx_ffc_cm"] = out["head_dy_ffc_cm"] = out["head_d_ffc_cm"] = None
 
-        # ── Head @ BFC relative to FRONT ankle at BFC  [FIX 2, FIX 4, FIX 6] ──
-        # FIX 6: reference is FRONT ankle (not back ankle) matching Code 2.
-        # FIX 2: head comes from BFC frame (not FFC frame).
-        # FIX 4: head_centroid averages all available face keypoints.
+        # ── Head @ BFC relative to FRONT ankle at BFC ────────
         head_bfc = head_centroid(kp["bfc"])
         if bowling_arm == "R":
             f_ankle_bfc = kp["bfc"].get("left_ankle")
@@ -522,6 +519,7 @@ def _avg_angles(a, b):
 class Annotator:
 
     def __init__(self, video_path: str, trial_id: str, existing_rows: pd.DataFrame):
+        self.video_path = video_path          # FIX 8: needed for re-open in grab seek
         self.cap        = cv2.VideoCapture(video_path)
         self.trial_id   = trial_id
         self.total      = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -531,20 +529,25 @@ class Annotator:
         self.calib_mode = False
         self.calib_pts: list = []
         self.result      = None
-        # FIX 7: _seek_idx is 0-based (for cap.set).
-        # frame_idx is 1-based (= _seek_idx + 1) matching the model pipeline
-        # which stores frame_no starting at 1.  All event frames saved to CSV
-        # use frame_idx so they are directly comparable to master.xlsx.
+        # _seek_idx: 0-based (internal position counter)
+        # frame_idx: 1-based (displayed, stored in CSV, matches pipeline)
         self._seek_idx   = 0
         self.frame_idx   = 1
-        self._read_frame(0)   # seek pos 0 → frame_idx 1
+        self._read_frame(0)
 
     def _read_frame(self, seek_pos: int) -> bool:
-        """Seek to 0-based seek_pos; update frame_idx to 1-based equivalent."""
+        """
+        FIX 8: Navigate to seek_pos (0-based) using grab()-based seeking.
+        Never uses cap.set() to avoid the MOV keyframe-snap offset.
+        Updates frame_idx to the 1-based equivalent.
+        """
         seek_pos = max(0, min(seek_pos, self.total - 1))
         self._seek_idx = seek_pos
-        self.frame_idx = seek_pos + 1   # FIX 7: 1-based to match model
-        self.cap.set(cv2.CAP_PROP_POS_FRAMES, seek_pos)
+        self.frame_idx = seek_pos + 1   # 1-based, matching pipeline
+
+        # Use grab()-based seek — accurate on MOV/H.264 (FIX 8)
+        _grab_seek(self.cap, self.video_path, seek_pos, self.total)
+
         ret, frame = self.cap.read()
         if ret:
             self.current_frame = frame.copy()
@@ -555,16 +558,16 @@ class Annotator:
         s = self.session
 
         # ── Progress bar — BOTTOM edge ───────────────────────
-        bar_y = h - 10
-        prog_x = int(self._seek_idx / max(self.total - 1, 1) * w)  # FIX 7: use 0-based seek for ratio
+        bar_y   = h - 10
+        prog_x  = int(self._seek_idx / max(self.total - 1, 1) * w)
         cv2.rectangle(frame, (0, bar_y), (w, h), (40, 40, 40), cv2.FILLED)
         cv2.rectangle(frame, (0, bar_y), (prog_x, h), (0, 200, 100), cv2.FILLED)
         for ev_val in s.events.values():
             if ev_val is not None:
-                tx = int((ev_val - 1) / max(self.total - 1, 1) * w)  # FIX 7: ev_val is 1-based
+                tx = int((ev_val - 1) / max(self.total - 1, 1) * w)
                 cv2.line(frame, (tx, bar_y - 4), (tx, h), COL_EVENT, 2)
 
-        # ── LEFT panel — status info (top-left) ──────────────
+        # ── LEFT panel — status info ──────────────────────────
         calib_str = (f"OK {s.px_per_m:.1f} px/m" if s.px_per_m
                      else "NOT SET — press C")
         calib_col  = COL_OK if s.px_per_m else COL_WARN
@@ -600,7 +603,7 @@ class Annotator:
 
         draw_panel(frame, left_lines, x0=10, y0=28, row_h=ROW_H)
 
-        # ── RIGHT panel — "what to do next" (top-right) ──────
+        # ── RIGHT panel — "what to do next" ──────────────────
         draw_next_instruction(frame, s, self.calib_mode)
 
         # ── Bottom legend ─────────────────────────────────────
@@ -612,7 +615,7 @@ class Annotator:
             put_text(frame, ln, (10, h - 22 - i * (int(LEGEND_SCALE * 30) + 10)),
                      scale=LEGEND_SCALE, color=(200, 200, 200))
 
-        # ── Keypoints (larger dots + labels) ─────────────────
+        # ── Keypoints ─────────────────────────────────────────
         active = self._phases_for_current_frame()
         for phase in active:
             for kname, pt in s.keypoints.get(phase, {}).items():
@@ -736,7 +739,7 @@ class Annotator:
             else:
                 delta = self._resolve_nav_key(key)
                 if delta is not None:
-                    self._read_frame(self._seek_idx + delta)  # FIX 7: navigate via 0-based seek
+                    self._read_frame(self._seek_idx + delta)
 
             # Auto-transition release → release_plus1
             s = self.session
@@ -763,10 +766,10 @@ class Annotator:
             ord('A'): -10,
             ord('d'): +10,
             ord('D'): +10,
-            2359296:  -10,  # Win Shift+Left
-            2490368:  +10,  # Win Shift+Right
-            0x1FF51:  -10,  # X11 Shift+Left
-            0x1FF53:  +10,  # X11 Shift+Right
+            2359296:  -10,
+            2490368:  +10,
+            0x1FF51:  -10,
+            0x1FF53:  +10,
         }
         delta = NAV.get(key)
         if delta is None:
