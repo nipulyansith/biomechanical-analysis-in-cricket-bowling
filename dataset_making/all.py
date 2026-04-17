@@ -23,6 +23,19 @@ FIXES in this version:
                    longest valid alternating sequence that ends at or
                    before release, then picks the final 5.
           FFC injection is still guaranteed (unchanged from original Fix 4).
+
+  FIX D: FRAME NUMBERING CONSISTENCY — all 6 video annotation modules
+          now use the same frame-tracking mechanism:
+            • New helper _open_and_advance() uses cap.grab() (no-decode)
+              for frame-accurate seeking instead of cap.set(CAP_PROP_POS_FRAMES)
+              which is unreliable on MOV/H.264 (seeks to nearest keyframe only).
+            • Every annotation loop derives frame_no from
+              cap.get(cv2.CAP_PROP_POS_FRAMES) after each cap.read() call,
+              so the counter always reflects the actual decoded frame, not
+              a manually-maintained offset that can drift from the seek target.
+            • idx = frame_no - 1 is used uniformly across all 6 loops for
+              0-based df_xy row lookups, matching how df_xy was built in
+              extract_keypoints().
 """
 
 import os, json, datetime
@@ -214,6 +227,61 @@ def _open_video_robust(video_path: str, max_retries: int = 3):
         "  • File is corrupt — verify it plays in VLC\n"
         "  • OpenCV built without FFMPEG support — reinstall: pip install opencv-python"
     )
+
+
+# =============================================================================
+# ── FIX D: FRAME-ACCURATE SEEK HELPER
+# =============================================================================
+def _open_and_advance(video_path: str, start_frame_1based: int) -> cv2.VideoCapture:
+    """
+    Open the video and advance to start_frame_1based using cap.grab() for
+    frame-accurate positioning.
+
+    cap.set(CAP_PROP_POS_FRAMES) is NOT used for seeking because on MOV/H.264
+    files it snaps to the nearest keyframe but cap.get() still reports the
+    *requested* position — so the verification check passes falsely and the
+    2-frame (or N-frame) offset is never caught.
+
+    Instead we always seek from frame 0 using cap.grab() (no decode overhead).
+    After target_0based grabs, the next cap.read() returns exactly the frame
+    numbered start_frame_1based (1-based), matching extract_keypoints().
+    """
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        cap.release()
+        cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
+    if not cap.isOpened():
+        raise RuntimeError(f"Cannot open video for annotation: {video_path}")
+
+    target_0based = max(0, start_frame_1based - 1)
+
+    if target_0based == 0:
+        return cap   # already at the start — nothing to skip
+
+    # Always use grab() from position 0 — never trust cap.set() on MOV files.
+    # grab() is fast (no decode); for a 600-frame seek at 60fps this takes
+    # well under a second.
+    for _ in range(target_0based):
+        if not cap.grab():
+            break   # hit end of file unexpectedly
+
+    return cap
+
+
+def _read_frame_with_number(cap: cv2.VideoCapture):
+    """
+    Read the next frame and return (ret, frame, frame_no_1based).
+
+    frame_no_1based is derived from cap.get(CAP_PROP_POS_FRAMES) AFTER
+    the read, which equals the 0-based index of the frame just decoded + 1,
+    i.e. the 1-based frame number.  This is the single authoritative source
+    of frame numbering used by ALL six annotation loops (FIX D).
+    """
+    ret, frame = cap.read()
+    if not ret:
+        return False, None, -1
+    frame_no_1based = int(round(cap.get(cv2.CAP_PROP_POS_FRAMES)))
+    return True, frame, frame_no_1based
 
 
 def stump_calibration(video_path, stump_height_m=0.711):
@@ -837,27 +905,9 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
     print(f"  After cluster-merge (pre-BFC): {len(pre_bfc_events)} events")
 
     # ── PASS 3: enforce strict alternation working BACKWARDS from BFC ────────
-    #
-    # The required foot sequence ending at BFC must strictly alternate.
-    # We work backwards from BFC: step3 must be opposite(BFC_foot),
-    # step2 must be BFC_foot, step1 must be opposite(BFC_foot).
-    #
-    # Strategy:
-    #   1. From the pre-BFC candidate pool, pick the LAST contact whose foot
-    #      matches the required foot for step3 (opposite of BFC).
-    #   2. From candidates strictly before that, pick the LAST contact whose
-    #      foot matches step2 (same as BFC).
-    #   3. From candidates strictly before that, pick the LAST contact whose
-    #      foot matches step1 (opposite of BFC).
-    #
-    # This guarantees perfect alternation regardless of any duplicates in the
-    # detected peak list.
-
     def opposite(foot):
         return "left" if foot == "right" else "right"
 
-    # Required feet for steps 1, 2, 3 (working forward, derived from BFC foot)
-    # Step4=BFC_foot, so going back: step3=opp, step2=bfc, step1=opp
     required_feet = [
         opposite(bfc_foot),   # step 1
         bfc_foot,             # step 2
@@ -865,27 +915,19 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
     ]
 
     def pick_last_before(candidates, max_frame_exclusive, required_foot):
-        """Return the last candidate (frame, foot) strictly before max_frame_exclusive
-        whose foot matches required_foot. Returns None if not found."""
         matched = [(f, ft) for f, ft in candidates
                    if ft == required_foot and f < max_frame_exclusive]
         return matched[-1] if matched else None
 
-    # Pick step 3 first (closest to BFC), then step 2, then step 1
     step3 = pick_last_before(pre_bfc_events, bfc_frame,              required_feet[2])
     step2 = pick_last_before(pre_bfc_events, step3[0] if step3 else bfc_frame, required_feet[1])
     step1 = pick_last_before(pre_bfc_events, step2[0] if step2 else bfc_frame, required_feet[0])
 
     steps_1_to_3 = [s for s in [step1, step2, step3] if s is not None]
 
-    # ── Padding fallback if fewer than 3 steps found ─────────────────────────
-    # If a required step couldn't be found, we synthesise a plausible frame
-    # by spacing backward from the earliest found step (or from BFC) using
-    # the median detected step interval as a spacing estimate.
     if len(steps_1_to_3) < 3:
         print(f"  ⚠️  Only {len(steps_1_to_3)} alternating steps found before BFC — padding.")
 
-        # Estimate a typical step interval from whatever we have + BFC
         known_frames = [s[0] for s in steps_1_to_3] + [bfc_frame]
         if len(known_frames) >= 2:
             diffs = [known_frames[i+1] - known_frames[i]
@@ -894,24 +936,15 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
         else:
             est_interval = max(6, int(0.20 * fps))
 
-        # Rebuild the full 3-step list from step3 backward
-        # We always anchor on whatever is closest to BFC first
-        anchor_frame = steps_1_to_3[-1][0] if steps_1_to_3 else bfc_frame
-        anchor_idx   = 2  # step3 index in required_feet
-
         full_steps = [None, None, None]
         for s in steps_1_to_3:
-            # Place each found step at its correct index based on foot
             for idx_r, req_foot in enumerate(required_feet):
                 if s[1] == req_foot and full_steps[idx_r] is None:
                     full_steps[idx_r] = s
                     break
 
-        # Fill missing slots by extrapolating backward
-        # Work right-to-left: if slot i is None, estimate from slot i+1
-        # (or from bfc_frame for slot 2)
         ref_frame = bfc_frame
-        for i in range(2, -1, -1):   # 2, 1, 0
+        for i in range(2, -1, -1):
             if full_steps[i] is None:
                 next_frame = (full_steps[i+1][0] if i < 2 and full_steps[i+1] is not None
                               else ref_frame)
@@ -923,7 +956,6 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
 
         steps_1_to_3 = full_steps
 
-    # ── Steps 4 and 5: always BFC and FFC from shared events ─────────────────
     step4 = (bfc_frame, bfc_foot)
     step5 = (ffc_frame, ffc_foot)
 
@@ -932,7 +964,6 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
     last5_frames = [s[0] for s in last5]
     foot_labels  = [s[1] for s in last5]
 
-    # ── Validation: report any foot-alternation violations ───────────────────
     print(f"\n✅ Last 5 foot contacts (frames): {last5_frames}")
     print(f"   Feet: {[f.upper() for f in foot_labels]}")
     for i in range(1, 5):
@@ -955,19 +986,23 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
     print(f"   Avg step interval:   {duration/4:.3f} s")
 
     # ── Video annotation ──────────────────────────────────────────────────────
+    # FIX D: Use _open_and_advance() + cap.get() for frame-accurate numbering.
     out_vid    = out_path("step_cadence_annotated.mp4")
     vw, ow, oh = sized_writer(out_vid, fps, width, height)
     step_foot_map = {last5_frames[i]: foot_labels[i] for i in range(5)}
     model_local   = YOLO(MODEL_PATH)
-    cap       = cv2.VideoCapture(video_path)
-    cap.set(cv2.CAP_PROP_POS_FRAMES, last5_frames[0] - 1)
-    frame_idx = last5_frames[0]
+
+    # Open video at the exact start frame using grab()-based seek (FIX D)
+    cap = _open_and_advance(video_path, last5_frames[0])
 
     print(f"\n🎬 Writing step cadence video…")
-    while frame_idx <= release_frame:
-        ret, frame = cap.read()
+    while True:
+        ret, frame, frame_idx = _read_frame_with_number(cap)   # FIX D
         if not ret:
             break
+        if frame_idx > release_frame:
+            break
+
         results   = model_local.predict(frame, verbose=False)
         annotated = cv2.resize(frame, (ow, oh))
         if (results and results[0].keypoints is not None
@@ -1038,7 +1073,6 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
         if frame_idx == release_frame: repeats = int(fps * 1.5)
         for _ in range(repeats):
             vw.write(annotated)
-        frame_idx += 1
 
     cap.release(); vw.release()
     compress_video(out_vid)
@@ -1051,6 +1085,7 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
         "avg_interval_s": duration / 4,
         "intervals_s":    intervals_s,
     }
+
 # =============================================================================
 # ── SECTION 6 : MODULE 2 — DELIVERY STRIDE
 # =============================================================================
@@ -1084,15 +1119,18 @@ def run_delivery_stride(df_xy, fps, events, meters_per_pixel, video_path, width,
 
     out_vid    = out_path("delivery_stride_annotated.mp4")
     vw, ow, oh = sized_writer(out_vid, fps, width, height)
-    cap        = cv2.VideoCapture(video_path)
-    frame_no   = 0
+    # FIX D: Sequential read from frame 1 — no seeking, uses cap.get() for frame_no
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        cap.release()
+        cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
     bfc_drawn  = ffc_drawn = False
 
     print(f"\n🎬 Writing delivery stride video…")
     while True:
-        ret, frame = cap.read()
-        if not ret: break
-        frame_no += 1
+        ret, frame, frame_no = _read_frame_with_number(cap)   # FIX D
+        if not ret:
+            break
         ann = cv2.resize(frame, (ow, oh)); s = OUTPUT_SCALE
         if frame_no >= bfc_frame: bfc_drawn = True
         if frame_no >= ffc_frame: ffc_drawn = True
@@ -1235,8 +1273,11 @@ def run_elbow_flexion(df_xy, fps, events, bowling_wrist, video_path, width, heig
 
     out_vid    = out_path("elbow_flexion_annotated.mp4")
     vw, ow, oh = sized_writer(out_vid, fps, width, height)
-    cap        = cv2.VideoCapture(video_path)
-    frame_no   = 0
+    # FIX D: Sequential read from frame 1, cap.get() for frame number
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        cap.release()
+        cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
 
     def elbow_color(ang):
         t = max(0.0, min(1.0, (180.0 - ang) / 120.0))
@@ -1244,9 +1285,10 @@ def run_elbow_flexion(df_xy, fps, events, bowling_wrist, video_path, width, heig
 
     print(f"\n🎬 Writing elbow flexion video…")
     while True:
-        ret, frame = cap.read()
-        if not ret: break
-        frame_no += 1; idx = frame_no - 1
+        ret, frame, frame_no = _read_frame_with_number(cap)   # FIX D
+        if not ret:
+            break
+        idx = frame_no - 1   # 0-based df_xy row index — consistent with extract_keypoints
         ann = cv2.resize(frame, (ow, oh)); s = OUTPUT_SCALE
         sh = (float(df_xy.loc[idx, f"{shoulder_col}_x"]),
               float(df_xy.loc[idx, f"{shoulder_col}_y"]))
@@ -1420,8 +1462,11 @@ def run_knee_flexion(df_xy, df_conf, fps, events, knee_side, video_path, width, 
 
     out_vid    = out_path("knee_flexion_annotated.mp4")
     vw, ow, oh = sized_writer(out_vid, fps, width, height)
-    cap        = cv2.VideoCapture(video_path)
-    frame_no   = 0
+    # FIX D: Sequential read from frame 1, cap.get() for frame number
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        cap.release()
+        cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
     tracker2   = KneeLockTracker(knee_side, fps, KNEE_MAX_JUMP_LEGLEN, KNEE_CONF_TH)
     last_good2 = None
 
@@ -1431,10 +1476,12 @@ def run_knee_flexion(df_xy, df_conf, fps, events, knee_side, video_path, width, 
 
     print(f"\n🎬 Writing knee flexion video…")
     while True:
-        ret, frame = cap.read()
-        if not ret: break
-        frame_no += 1; idx = frame_no - 1
-        if idx >= len(df_xy): break
+        ret, frame, frame_no = _read_frame_with_number(cap)   # FIX D
+        if not ret:
+            break
+        idx = frame_no - 1   # 0-based df_xy row index
+        if idx >= len(df_xy):
+            break
         ann = cv2.resize(frame, (ow, oh)); s = OUTPUT_SCALE
         kp_xy   = np.array([[df_xy.loc[idx, f"{name}_x"],
                              df_xy.loc[idx, f"{name}_y"]]
@@ -1576,15 +1623,18 @@ def run_head_position(df_xy, fps, events, bowling_wrist,
 
     out_vid    = out_path("head_position_annotated.mp4")
     vw, ow, oh = sized_writer(out_vid, fps, width, height)
-    cap        = cv2.VideoCapture(video_path)
-    cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, bfc_frame-1))
+    # FIX D: Use _open_and_advance() with grab() for frame-accurate seek
+    cap = _open_and_advance(video_path, bfc_frame)
 
     print(f"\n🎬 Writing head position video…")
-    frame_no = bfc_frame
-    while frame_no <= release_frame:
-        ret, frame = cap.read()
-        if not ret: break
-        idx2 = frame_no - 1; ann = cv2.resize(frame, (ow, oh)); s = OUTPUT_SCALE
+    while True:
+        ret, frame, frame_no = _read_frame_with_number(cap)   # FIX D
+        if not ret:
+            break
+        if frame_no > release_frame:
+            break
+        idx2 = frame_no - 1   # 0-based df_xy row index
+        ann = cv2.resize(frame, (ow, oh)); s = OUTPUT_SCALE
         hx2 = float(df_xy.loc[idx2,"head_x"]) if idx2<len(df_xy) else np.nan
         hy2 = float(df_xy.loc[idx2,"head_y"]) if idx2<len(df_xy) else np.nan
         fx2 = float(df_xy.loc[idx2,f"{front_ankle}_x"]) if idx2<len(df_xy) else np.nan
@@ -1620,7 +1670,6 @@ def run_head_position(df_xy, fps, events, bowling_wrist,
         if frame_no in [bfc_frame, ffc_frame, release_frame]:
             repeats += int(fps*2.0)
         for _ in range(repeats): vw.write(ann)
-        frame_no += 1
 
     cap.release(); vw.release()
     compress_video(out_vid)
@@ -1750,11 +1799,10 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
     ball_mode_b = None
     if BALL_MODEL_PATH is not None:
         ball_model_b = YOLO(BALL_MODEL_PATH)
-        cap_b = cv2.VideoCapture(video_path)
-        cap_b.set(cv2.CAP_PROP_POS_FRAMES, max(0, rel_frame2-1))
+        cap_b = _open_and_advance(video_path, max(1, rel_frame2))
         pts_b = []
         for _ in range(BALL_TRACK_FRAMES):
-            ok_b, frm_b = cap_b.read()
+            ok_b, frm_b, _ = _read_frame_with_number(cap_b)
             if not ok_b: break
             res_b = ball_model_b.predict(frm_b, verbose=False)
             if res_b and res_b[0].boxes is not None and len(res_b[0].boxes)>0:
@@ -1815,16 +1863,22 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
 
     out_vid       = out_path("wrist_velocity_annotated.mp4")
     vw, ow, oh    = sized_writer(out_vid, fps, width, height)
-    cap           = cv2.VideoCapture(video_path)
-    frame_no      = 0; slow_mo = 4
+    # FIX D: Sequential read from frame 1, cap.get() for frame number
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        cap.release()
+        cap = cv2.VideoCapture(video_path, cv2.CAP_FFMPEG)
+    slow_mo = 4
     max_speed_kmh = max(float(np.nanmax(df_xy["wrist_speed_kmh_sm"])), 1.0)
 
     print(f"\n🎬 Writing wrist velocity video  ({arm.upper()} arm)…")
     while True:
-        ret, frame = cap.read()
-        if not ret: break
-        frame_no += 1; idx = frame_no - 1
-        if idx >= len(df_xy): break
+        ret, frame, frame_no = _read_frame_with_number(cap)   # FIX D
+        if not ret:
+            break
+        idx = frame_no - 1   # 0-based df_xy row index
+        if idx >= len(df_xy):
+            break
         ann = cv2.resize(frame, (ow, oh)); s = OUTPUT_SCALE
         wxi=float(df_xy.loc[idx,"wrist_x_sm"]); wyi=float(df_xy.loc[idx,"wrist_y_sm"])
         exi=float(df_xy.loc[idx,"elbow_x_sm"]); eyi=float(df_xy.loc[idx,"elbow_y_sm"])
