@@ -38,7 +38,7 @@ import openpyxl
 # =============================================================================
 # ── SETTINGS
 # =============================================================================
-VIDEO_PATH   = r"C:\Nipul\videos\B-03_T-01.MOV"
+VIDEO_PATH   = r"C:\Nipul\videos\B-09_T-09.MOV"
 MODEL_PATH   = "yolov8l-pose.pt"
 BASE_OUT_DIR = "output"
 
