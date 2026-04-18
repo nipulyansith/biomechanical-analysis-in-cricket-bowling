@@ -140,9 +140,9 @@ def safe_float(v):
 
 
 # ── File paths – edit these to match your local setup ────────────────────────
-GT_PATH    = r"C:\Users\nipul\OneDrive\Desktop\tm\dataset_making\New Dataset\ground_truth.csv"
-MODEL_PATH = r"C:\Users\nipul\OneDrive\Desktop\tm\dataset_making\New Dataset\masterNewNewFinal.xlsx"
-OUTPUT_DIR = r"C:\Users\nipul\OneDrive\Desktop\tm\dataset_making\New Dataset\outputs"
+GT_PATH    = r"C:\Users\nipul\OneDrive\Desktop\tm\EXP\ground_truth.csv"
+MODEL_PATH = r"C:\Users\nipul\OneDrive\Desktop\tm\EXP\master.xlsx"
+OUTPUT_DIR = r"C:\Users\nipul\OneDrive\Desktop\tm\EXP\outputs"
 # ─────────────────────────────────────────────────────────────────────────────
 
 
