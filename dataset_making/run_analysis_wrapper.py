@@ -10,8 +10,25 @@ import json
 import argparse
 from pathlib import Path
 
+# Force UTF-8 output so emoji in print statements don't crash on Windows,
+# where stdout defaults to the cp1252 codepage when piped/captured.
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
+
+# ultralytics==8.0.195 predates PyTorch 2.6's change of torch.load's default
+# weights_only from False to True, so it never passes the argument itself and
+# now trips the new strict default on our own trusted local .pt checkpoints.
+# Restore the pre-2.6 behavior for this process.
+import torch
+_original_torch_load = torch.load
+def _patched_torch_load(*args, **kwargs):
+    kwargs.setdefault('weights_only', False)
+    return _original_torch_load(*args, **kwargs)
+torch.load = _patched_torch_load
 
 def main():
     parser = argparse.ArgumentParser(description='Run bowling biomechanics analysis')

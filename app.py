@@ -12,6 +12,12 @@ import cv2
 import subprocess
 import shutil
 from pathlib import Path
+
+# Force UTF-8 output so emoji in print statements don't crash on Windows,
+# where stdout defaults to the cp1252 codepage in some terminals/launchers.
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
 from datetime import datetime
 from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
@@ -604,6 +610,7 @@ def run_analysis(session_id, video_path, bowling_arm, calibration_top,
     # Use subprocess to run the wrapper script
     env = os.environ.copy()
     env['PYTHONPATH'] = str(DATASET_MAKING_DIR) + ':' + env.get('PYTHONPATH', '')
+    env['PYTHONIOENCODING'] = 'utf-8'
     
     # Construct command
     cmd = [
@@ -621,8 +628,8 @@ def run_analysis(session_id, video_path, bowling_arm, calibration_top,
     print(f"\n🚀 Running command: {' '.join(cmd)}\n")
     
     # Run analysis
-    result = subprocess.run(cmd, cwd=str(DATASET_MAKING_DIR), env=env, 
-                          capture_output=True, text=True, timeout=600)
+    result = subprocess.run(cmd, cwd=str(DATASET_MAKING_DIR), env=env,
+                          capture_output=True, text=True, encoding='utf-8', timeout=600)
     
     # Print output for debugging
     if result.stdout:

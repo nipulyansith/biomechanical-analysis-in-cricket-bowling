@@ -491,7 +491,8 @@ def extract_keypoints(video_path, model):
             conf_row[f"{name}_conf"] = np.nan
         results = model.predict(frame, verbose=False)
         if (results and results[0].keypoints is not None
-                and len(results[0].keypoints.xy) > 0):
+                and len(results[0].keypoints.xy) > 0
+                and results[0].keypoints.conf is not None):
             kps_xy   = results[0].keypoints.xy.cpu().numpy()
             kps_conf = results[0].keypoints.conf.cpu().numpy()
             boxes    = results[0].boxes.xywh.cpu().numpy()
