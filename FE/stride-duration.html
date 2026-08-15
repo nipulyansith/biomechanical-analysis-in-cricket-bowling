@@ -1,211 +1,109 @@
 <!DOCTYPE html>
-
-<html class="dark" lang="en"><head>
+<html class="dark" lang="en">
+<head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Step Duration — PitchIQ</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700&amp;family=Lexend:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700;800&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="assets/css/theme.css" rel="stylesheet"/>
 <script src="api-client.js"></script>
 <script id="tailwind-config">
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            "colors": {
-                "surface-container-lowest": "#090f12",
-                "surface": "#0e1417",
-                "background": "#0e1417",
-                "secondary": "#81d9a1",
-                "on-surface-variant": "#c2c7cc",
-                "on-tertiary-fixed-variant": "#3c4d00",
-                "on-primary": "#003547",
-                "tertiary": "#abd600",
-                "surface-variant": "#303639",
-                "surface-container-high": "#252b2e",
-                "primary-container": "#002d3d",
-                "on-tertiary-container": "#7c9c00",
-                "on-error": "#690005",
-                "surface-container": "#1a2024",
-                "primary": "#96ceeb",
-                "on-primary-container": "#6098b2",
-                "on-tertiary-fixed": "#161e00",
-                "on-secondary": "#00391e",
-                "inverse-primary": "#2a657e",
-                "tertiary-fixed": "#c3f400",
-                "tertiary-container": "#222d00",
-                "surface-container-highest": "#303639",
-                "inverse-surface": "#dee3e7",
-                "inverse-on-surface": "#2b3135",
-                "error-container": "#93000a",
-                "error": "#ffb4ab",
-                "on-secondary-fixed-variant": "#00522e",
-                "surface-container-low": "#161c20",
-                "secondary-container": "#006a3d",
-                "on-background": "#dee3e7",
-                "outline-variant": "#42484c",
-                "on-primary-fixed": "#001f2b",
-                "surface-tint": "#96ceeb",
-                "outline": "#8c9196",
-                "on-secondary-container": "#8fe7af",
-                "on-primary-fixed-variant": "#044d65",
-                "secondary-fixed": "#9df5bc",
-                "on-secondary-fixed": "#002110",
-                "primary-fixed-dim": "#96ceeb",
-                "secondary-fixed-dim": "#81d9a1",
-                "primary-fixed": "#bfe8ff",
-                "on-tertiary": "#283500",
-                "surface-dim": "#0e1417",
-                "tertiary-fixed-dim": "#abd600",
-                "on-surface": "#dee3e7",
-                "surface-bright": "#343a3d",
-                "on-error-container": "#ffdad6"
-            },
-            "borderRadius": {
-                "DEFAULT": "0.125rem",
-                "lg": "0.25rem",
-                "xl": "0.5rem",
-                "full": "0.75rem"
-            },
-            "fontFamily": {
-                "headline": ["Space Grotesk"],
-                "body": ["Manrope"],
-                "label": ["Lexend"]
-            }
-          },
-        },
-      }
-    </script>
-<style>
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        }
-        body {
-            font-family: 'Manrope', sans-serif;
-            background-color: #0e1417;
-            color: #dee3e7;
-        }
-        .glass-panel {
-            background: rgba(37, 43, 46, 0.7);
-            backdrop-filter: blur(20px);
-        }
-    </style>
-<style>
-    body {
-      min-height: max(884px, 100dvh);
-    }
-  </style>
-  </head>
-<body class="bg-background text-on-background min-h-screen pb-24">
-<!-- TopAppBar -->
-<header class="w-full top-0 sticky z-50 bg-[#0e1417] flex justify-between items-center px-6 py-4">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-[#96ceeb] text-2xl" data-icon="speed">speed</span>
-<h1 class="font-['Space_Grotesk'] tracking-tight text-xl font-bold text-[#96ceeb]">FastBowl Lab</h1>
-</div>
-<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border border-outline-variant/20">
-<img alt="User Profile" class="w-full h-full object-cover" data-alt="Close up portrait of a focused professional athlete with a clean studio lighting background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuClfg0d_zXW6ifhrXTjzH8uDLgA-06sqJX-2LVVrry1354IKJGzCePz1wSwY4p2w9di5g2ux0pOsQ0Se0-PA1QfaPF7TjrMurfwAqr0HaX9bUxDaN1gUezQdgOrd1y77J0S_kwygd-9Ay4_u5DJc4bAYt9kUkxKGn5Uxi-WKPqHNQuzsc1OVf4JHuQK3hBO23ZmaS7zYhjasLydkoc45GmDZHx3WTaOc26LBLWXjwCFJRqvN0URSCrMJxdljMFAE_kXBGxYVe42aEsB"/>
-</div>
+  tailwind.config = {
+    darkMode: "class",
+    theme: { extend: {
+      colors: {
+        background: "#05070a", surface: "#0b0f17", "surface-high": "#10151f", "surface-highest": "#171d2b",
+        border: "#232a3a", primary: "#123a8c", "primary-soft": "#1a4fb4", "on-primary": "#eaf4ff",
+        accent: "#2e8fff", "accent-soft": "#5ec8ff", "on-accent": "#04101f",
+        red: "#e5484d", "red-soft": "#ff6b6f", blue: "#4fd6ff",
+        ink: "#eef3fb", muted: "#8b96a6", faint: "#56607a"
+      },
+      fontFamily: { headline: ["Space Grotesk"], body: ["Manrope"], label: ["Lexend"] }
+    }}
+  }
+</script>
+</head>
+<body class="bg-background text-ink min-h-screen pb-16">
+
+<header class="pitchiq-header flex justify-between items-center px-6 py-4">
+  <a href="#" onclick="goBackToResults(event)" class="flex items-center gap-2 hover:opacity-80 transition">
+    <span class="material-symbols-outlined text-accent-soft">arrow_back</span>
+    <h1 class="font-headline text-lg font-bold text-accent-soft">Step Duration</h1>
+  </a>
+  <button onclick="downloadVideo()" class="btn-secondary flex items-center gap-2 px-4 py-2 text-sm">
+    <span class="material-symbols-outlined text-lg">download</span> Video
+  </button>
 </header>
-<main class="max-w-5xl mx-auto px-6 py-8">
-<!-- Hero Header -->
-<section class="mb-12">
-<p class="font-label text-tertiary text-sm tracking-widest mb-2">BIOMECHANIC REPORT</p>
-<h2 class="font-headline text-5xl md:text-6xl font-bold text-on-background tracking-tight leading-none">
-                Final Run-Up Rhythm
-            </h2>
-</section>
-<!-- Primary Metrics Bento -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-<!-- Metric Card 1 -->
-<div class="bg-surface-container-high p-8 rounded-full flex flex-col justify-between border-l-4 border-tertiary">
-<span class="font-label text-on-surface-variant text-sm uppercase tracking-wider">Avg Step Duration</span>
-<div class="mt-4 flex items-baseline gap-2">
-<span class="font-headline text-5xl font-bold text-tertiary" id="avgStepDuration">0.00</span>
-<span class="font-label text-on-surface-variant text-xl">sec</span>
-</div>
-</div>
-<!-- Metric Card 2 -->
-<div class="bg-surface-container-high p-8 rounded-full flex flex-col justify-between border-l-4 border-primary">
-<span class="font-label text-on-surface-variant text-sm uppercase tracking-wider">Rhythm Consistency %</span>
-<div class="mt-4 flex items-baseline gap-2">
-<span class="font-headline text-5xl font-bold text-primary" id="rhythmConsistency">0.0</span>
-<span class="font-label text-on-surface-variant text-xl">%</span>
-</div>
-</div>
-<!-- Metric Card 3 - Stride Cadence -->
-<div class="bg-surface-container-high p-8 rounded-full flex flex-col justify-between border-l-4 border-secondary">
-<span class="font-label text-on-surface-variant text-sm uppercase tracking-wider">Stride Cadence</span>
-<div class="mt-4 flex items-baseline gap-2">
-<span class="font-headline text-5xl font-bold text-secondary" id="strideCadence">0.0</span>
-<span class="font-label text-on-surface-variant text-xl">steps/sec</span>
-</div>
-</div>
-</div>
 
-<!-- Annotated Video Section -->
-<section class="mb-8">
-<div class="bg-surface-container-low p-8 md:p-12 rounded-xl">
-<h3 class="font-headline text-2xl font-semibold mb-6">Step Duration Analysis Video</h3>
-<div class="bg-surface-container-highest rounded-lg overflow-hidden aspect-video flex items-center justify-center">
-<video id="annotatedVideo" class="w-full h-full" controls preload="metadata" crossorigin="anonymous">
-Your browser does not support the video tag.
-</video>
-</div>
-</section>
+<main class="max-w-5xl mx-auto px-6 py-10">
+  <section class="mb-10">
+    <p class="section-eyebrow mb-2">Biomechanic Report</p>
+    <h2 class="font-headline text-4xl md:text-5xl font-bold text-ink tracking-tight">Final Run-Up Rhythm</h2>
+  </section>
 
-<!-- Main Chart Section: Step Timeline -->
-<section class="mb-8">
-<div class="bg-surface-container-low p-8 md:p-12 rounded-xl">
-<div class="flex justify-between items-end mb-12">
-<div>
-<h3 class="font-headline text-2xl font-semibold mb-1">Final 5 Strides Before Crease</h3>
-<p class="font-body text-on-surface-variant text-sm">Step interval durations</p>
-</div>
-<div class="flex gap-4">
-<div class="flex items-center gap-2">
-<div class="w-3 h-3 rounded-full bg-tertiary"></div>
-<span class="font-label text-xs">Above Average</span>
-</div>
-<div class="flex items-center gap-2">
-<div class="w-3 h-3 rounded-full bg-primary"></div>
-<span class="font-label text-xs">Normal</span>
-</div>
-</div>
-</div>
-<!-- Visual Timeline -->
-<div class="space-y-10" id="stridesContainer">
-<!-- Steps will be dynamically populated -->
-</div>
-</div>
-</section>
+  <div class="rail mb-8 reveal">
+    <div class="rail__item">
+      <span class="rail__label"><span class="material-symbols-outlined">timer</span>Avg Step Duration</span>
+      <div class="flex items-baseline gap-2">
+        <span class="rail__value tnum" id="avgStepDuration">0.00</span>
+        <span class="rail__unit">sec</span>
+      </div>
+    </div>
+    <div class="rail__item">
+      <span class="rail__label"><span class="material-symbols-outlined">graphic_eq</span>Rhythm Consistency</span>
+      <div class="flex items-baseline gap-2">
+        <span class="rail__value tnum" id="rhythmConsistency">0.0</span>
+        <span class="rail__unit">%</span>
+      </div>
+    </div>
+    <div class="rail__item">
+      <span class="rail__label"><span class="material-symbols-outlined">directions_run</span>Stride Cadence</span>
+      <div class="flex items-baseline gap-2">
+        <span class="rail__value tnum" id="strideCadence">0.0</span>
+        <span class="rail__unit">steps/sec</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Annotated Video -->
+  <section class="analytics-card mb-8 reveal">
+    <div class="analytics-card__header">
+      <h3 class="analytics-card__title">Step Cadence Analysis Video</h3>
+      <p class="analytics-card__caption">Foot-contact detections annotated frame by frame</p>
+    </div>
+    <div class="analytics-card__frame hud-frame aspect-video flex items-center justify-center">
+      <video id="annotatedVideo" class="w-full h-full" controls preload="metadata" crossorigin="anonymous">
+        Your browser does not support the video tag.
+      </video>
+    </div>
+  </section>
+
+  <!-- Timeline -->
+  <section class="analytics-card reveal">
+    <div class="flex justify-between items-end mb-8 flex-wrap gap-4">
+      <div class="analytics-card__header !mb-0">
+        <h3 class="analytics-card__title">Final 5 Strides Before Crease</h3>
+        <p class="analytics-card__caption">Step interval durations, seconds</p>
+      </div>
+      <div class="flex gap-4">
+        <div class="flex items-center gap-2">
+          <div class="w-3 h-3 rounded-full bg-accent"></div>
+          <span class="font-label text-xs text-muted">Above Average</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-3 h-3 rounded-full bg-[#3a4a68]"></div>
+          <span class="font-label text-xs text-muted">Normal</span>
+        </div>
+      </div>
+    </div>
+    <div class="space-y-8" id="stridesContainer"></div>
+  </section>
 </main>
-<!-- BottomNavBar -->
-<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 py-3 pb-safe bg-[#0e1417]/80 backdrop-blur-xl rounded-t-xl shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
-<div class="flex flex-col items-center justify-center text-[#96ceeb]/60 hover:text-[#abd600] active:scale-90 transition-transform">
-<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
-<span class="font-['Lexend'] text-[11px] font-medium">Dashboard</span>
-</div>
-<div class="flex flex-col items-center justify-center text-[#abd600] bg-[#006a3d]/20 rounded-xl px-3 py-1 active:scale-90 transition-transform">
-<span class="material-symbols-outlined" data-icon="history" data-weight="fill" style="font-variation-settings: 'FILL' 1;">history</span>
-<span class="font-['Lexend'] text-[11px] font-medium">Sessions</span>
-</div>
-<div class="flex flex-col items-center justify-center text-[#96ceeb]/60 hover:text-[#abd600] active:scale-90 transition-transform">
-<span class="material-symbols-outlined" data-icon="add_circle">add_circle</span>
-<span class="font-['Lexend'] text-[11px] font-medium">Upload</span>
-</div>
-<div class="flex flex-col items-center justify-center text-[#96ceeb]/60 hover:text-[#abd600] active:scale-90 transition-transform">
-<span class="material-symbols-outlined" data-icon="settings">settings</span>
-<span class="font-['Lexend'] text-[11px] font-medium">Settings</span>
-</div>
-</nav>
 
+<script src="assets/js/shared.js"></script>
 <script>
-/**
- * Step Duration Analysis - Data Loading and Visualization
- */
-
 class StepDurationPage {
     constructor() {
         this.api = new FastBowlAPI();
@@ -214,56 +112,31 @@ class StepDurationPage {
     }
 
     getSessionId() {
-        // Method 1: Check URL parameters (highest priority)
         const params = new URLSearchParams(window.location.search);
-        if (params.has('session')) {
-            const urlSessionId = params.get('session');
-            console.log('Session ID from URL:', urlSessionId);
-            return urlSessionId;
-        }
+        if (params.has('session')) return params.get('session');
 
-        // Method 2: Check localStorage (user navigated back from results)
         const localSessionId = localStorage.getItem('lastSessionId');
-        if (localSessionId) {
-            console.log('Session ID from localStorage:', localSessionId);
-            return localSessionId;
-        }
+        if (localSessionId) return localSessionId;
 
-        // Method 3: Check sessionStorage
         const storedSessionId = sessionStorage.getItem('sessionId');
-        if (storedSessionId) {
-            console.log('Session ID from sessionStorage:', storedSessionId);
-            return storedSessionId;
-        }
+        if (storedSessionId) return storedSessionId;
 
-        // Method 4: Use FastBowlAPI's sessionId if available
-        if (this.api && this.api.sessionId) {
-            console.log('Session ID from API client:', this.api.sessionId);
-            return this.api.sessionId;
-        }
+        if (this.api && this.api.sessionId) return this.api.sessionId;
 
-        console.log('No session ID found');
         return null;
     }
 
     async init() {
         try {
-            // If no session ID, try to load most recent session
             if (!this.sessionId) {
-                console.log('No session ID provided. Attempting to load most recent session...');
                 await this.loadMostRecentSession();
             }
 
-            // If still no session ID, show error
             if (!this.sessionId) {
-                console.warn('No session ID available after attempting to load');
                 this.showNoDataMessage();
                 return;
             }
 
-            console.log('Loading results for session:', this.sessionId);
-
-            // Fetch analysis results
             const response = await fetch(`/api/results/${this.sessionId}`);
             if (!response.ok) {
                 if (response.status === 404) {
@@ -273,19 +146,13 @@ class StepDurationPage {
             }
 
             const data = await response.json();
-            if (!data.success) {
-                throw new Error(data.error || 'Failed to load results');
-            }
-            
-            if (!data.results) {
-                throw new Error('No analysis results available');
-            }
+            if (!data.success) throw new Error(data.error || 'Failed to load results');
+            if (!data.results) throw new Error('No analysis results available');
 
             this.analysisData = data.results;
             this.populateMetrics();
             this.populateStridesTimeline();
             this.loadAnnotatedVideo();
-            console.log('Step duration data loaded successfully');
         } catch (error) {
             console.error('Error loading step duration data:', error);
             this.showErrorMessage(error.message);
@@ -294,29 +161,13 @@ class StepDurationPage {
 
     async loadMostRecentSession() {
         try {
-            console.log('Fetching sessions list...');
             const response = await fetch('/api/sessions');
-            console.log('Sessions response status:', response.status);
-            
-            if (!response.ok) {
-                console.warn('Failed to fetch sessions:', response.status);
-                return;
-            }
-            
+            if (!response.ok) return;
             const data = await response.json();
-            console.log('Sessions data:', data);
-            
             if (data.success && data.sessions && data.sessions.length > 0) {
-                // Sort by creation date and get the most recent
-                const sessions = data.sessions.sort((a, b) => 
-                    new Date(b.created_at) - new Date(a.created_at)
-                );
-                // Use session_id not id
+                const sessions = data.sessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
                 this.sessionId = sessions[0].session_id;
                 sessionStorage.setItem('sessionId', this.sessionId);
-                console.log('Loaded most recent session:', this.sessionId);
-            } else {
-                console.warn('No sessions found in response');
             }
         } catch (error) {
             console.warn('Could not load sessions list:', error);
@@ -325,27 +176,13 @@ class StepDurationPage {
 
     showNoDataMessage() {
         const container = document.getElementById('stridesContainer');
-        if (container) {
-            container.innerHTML = `
-                <div class="text-center py-12">
-                    <p class="text-on-surface-variant">No analysis data available</p>
-                    <p class="text-sm text-on-surface-variant/60 mt-2">Please upload and analyze a video first</p>
-                </div>
-            `;
-        }
+        if (container) container.innerHTML = `<div class="state-empty">No analysis data available<br><span class="text-xs">Please upload and analyze a video first</span></div>`;
         this.disableMetrics();
     }
 
     showErrorMessage(message) {
         const container = document.getElementById('stridesContainer');
-        if (container) {
-            container.innerHTML = `
-                <div class="text-center py-12">
-                    <p class="text-error">Error loading data</p>
-                    <p class="text-sm text-on-surface-variant/60 mt-2">${message}</p>
-                </div>
-            `;
-        }
+        if (container) container.innerHTML = `<div class="state-error">Error loading data<br><span class="text-xs">${message}</span></div>`;
         this.disableMetrics();
     }
 
@@ -359,22 +196,19 @@ class StepDurationPage {
         const cadence = this.analysisData.stride_duration;
         if (!cadence) return;
 
-        // Avg Step Duration
         const avgStepDuration = cadence.avg_interval_s || 0;
         document.getElementById('avgStepDuration').textContent = avgStepDuration.toFixed(3);
 
-        // Stride Cadence (steps per second)
         const strideCadence = avgStepDuration > 0 ? 1 / avgStepDuration : 0;
         document.getElementById('strideCadence').textContent = strideCadence.toFixed(2);
 
-        // Rhythm Consistency % (100 - coefficient of variation)
         const intervals = cadence.intervals_s || [];
         if (intervals.length > 1) {
             const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length;
             const variance = intervals.reduce((sq, n) => sq + Math.pow(n - mean, 2), 0) / intervals.length;
             const stdDev = Math.sqrt(variance);
-            const cv = (stdDev / mean) * 100; // Coefficient of variation in %
-            const consistency = Math.max(0, 100 - cv); // Convert to consistency %
+            const cv = (stdDev / mean) * 100;
+            const consistency = Math.max(0, 100 - cv);
             document.getElementById('rhythmConsistency').textContent = consistency.toFixed(1);
         }
     }
@@ -386,13 +220,12 @@ class StepDurationPage {
         const intervals = cadence.intervals_s || [];
         const footLabels = cadence.foot_labels || [];
         const container = document.getElementById('stridesContainer');
-        
-        if (container) {
-            container.innerHTML = ''; // Clear existing content
 
-            // Calculate average for comparison
-            const avgInterval = intervals.length > 0 
-                ? intervals.reduce((a, b) => a + b, 0) / intervals.length 
+        if (container) {
+            container.innerHTML = '';
+
+            const avgInterval = intervals.length > 0
+                ? intervals.reduce((a, b) => a + b, 0) / intervals.length
                 : 0;
 
             const maxInterval = Math.max(...intervals, avgInterval);
@@ -401,121 +234,77 @@ class StepDurationPage {
                 const stepNum = index + 1;
                 const footLabel = footLabels[index + 1]?.toUpperCase() || 'STEP';
                 const isAboveAverage = duration > avgInterval;
-                const barColor = isAboveAverage ? 'bg-tertiary' : 'bg-primary';
+                const barColor = isAboveAverage ? 'bg-accent' : 'bg-[#3a4a68]';
                 const barWidth = (duration / maxInterval) * 100;
 
-                const stepHTML = `
+                container.innerHTML += `
                     <div class="relative">
                         <div class="flex justify-between items-center mb-2">
-                            <span class="font-label text-xs text-on-surface-variant">STEP ${stepNum} (${footLabel})</span>
-                            <span class="font-label text-sm font-medium">${duration.toFixed(3)}s</span>
+                            <span class="font-label text-xs text-muted">STEP ${stepNum} (${footLabel})</span>
+                            <span class="font-label text-sm font-medium text-ink">${duration.toFixed(3)}s</span>
                         </div>
-                        <div class="h-4 bg-surface-container-highest rounded-full w-full overflow-hidden">
+                        <div class="h-3 bg-surface-highest rounded-full w-full overflow-hidden">
                             <div class="h-full ${barColor} rounded-full" style="width: ${barWidth}%;"></div>
                         </div>
                     </div>
                 `;
-
-                container.innerHTML += stepHTML;
             });
 
-            // Add release point indicator
             if (intervals.length > 0) {
-                const releaseHTML = `
-                    <div class="relative mt-8 pt-8 border-t border-outline-variant/30">
+                container.innerHTML += `
+                    <div class="relative mt-6 pt-6 border-t border-border">
                         <div class="flex items-center gap-2">
-                            <div class="w-3 h-3 rounded-full bg-error"></div>
-                            <span class="font-label text-xs text-on-surface-variant">RELEASE POINT</span>
+                            <div class="w-3 h-3 rounded-full bg-red"></div>
+                            <span class="font-label text-xs text-muted">RELEASE POINT</span>
                         </div>
                     </div>
                 `;
-                container.innerHTML += releaseHTML;
             }
         }
     }
 
     loadAnnotatedVideo() {
         const videoElement = document.getElementById('annotatedVideo');
-        
-        if (!videoElement) {
-            console.warn('Video element not found in DOM');
-            return;
-        }
-        
+        if (!videoElement) return;
+
         const videoUrl = `/api/results/${this.sessionId}/video/step_cadence_annotated.mp4`;
-        console.log('Loading step duration video:', videoUrl);
-        
-        // Set the src and call load()
         videoElement.src = videoUrl;
         videoElement.load();
-        
-        // Log playback state
-        videoElement.addEventListener('canplay', () => {
-            console.log('✅ Video ready to play');
-        }, { once: true });
-        
-        // Add error handler
-        videoElement.addEventListener('error', (e) => {
-            console.error('Video failed to load:', videoUrl);
-            console.error('Error event:', e);
-            console.error('Error code:', videoElement.error?.code, videoElement.error?.message);
+
+        videoElement.addEventListener('error', () => {
             videoElement.style.display = 'none';
             const errorDiv = videoElement.parentElement;
-            if (errorDiv) {
-                errorDiv.innerHTML = `
-                    <div class="text-center py-12">
-                        <p class="text-error">Video failed to load</p>
-                        <p class="text-sm text-on-surface-variant/60 mt-2">URL: ${videoUrl}</p>
-                        <p class="text-sm text-on-surface-variant/60">Please check browser console for details</p>
-                    </div>
-                `;
-            }
+            if (errorDiv) errorDiv.innerHTML = `<div class="state-error">Video failed to load</div>`;
         }, { once: true });
     }
 }
 
-// Initialize when page loads
+let stepPage;
 document.addEventListener('DOMContentLoaded', () => {
-    const page = new StepDurationPage();
-    page.init();
-    
-    // Setup navigation - will get sessionId from page after init completes
-    setTimeout(() => setupNavigation(page), 500);
+    stepPage = new StepDurationPage();
+    stepPage.init();
 });
 
-function setupNavigation(page) {
-    const sessionId = page?.sessionId;
-    console.log('Setting up navigation with sessionId:', sessionId);
-    
-    // Get all nav buttons
-    const navButtons = document.querySelectorAll('nav > div');
-    navButtons.forEach((button, index) => {
-        button.style.cursor = 'pointer';
-        button.addEventListener('click', (e) => {
-            // Prevent default if it's a link
-            if (e.target.closest('a')) {
-                e.preventDefault();
-            }
-            
-            if (index === 0) {
-                // Dashboard button
-                if (sessionId) {
-                    window.location.href = `results.html?session=${sessionId}`;
-                } else {
-                    // Fallback to localStorage
-                    const savedSessionId = localStorage.getItem('lastSessionId');
-                    if (savedSessionId) {
-                        window.location.href = `results.html?session=${savedSessionId}`;
-                    } else {
-                        window.location.href = 'results.html';
-                    }
-                }
-            } else if (index === 1) {
-                // Sessions button
-                window.location.href = 'index.html';
-            }
-        });
-    });
+function downloadVideo() {
+    const sessionId = stepPage?.sessionId;
+    if (!sessionId) return;
+    window.location.href = `/api/results/${sessionId}/download/stride_video`;
+}
+
+function goBackToResultsLocal(event) {
+    event.preventDefault();
+    const sessionId = stepPage?.sessionId || localStorage.getItem('lastSessionId');
+    window.location.href = sessionId ? `results.html?session=${sessionId}` : 'results.html';
 }
 </script>
-</body></html>
+<script>
+// override shared goBackToResults to use the page-local session resolution (StepDurationPage
+// resolves the session id through more fallbacks than window.API alone)
+function goBackToResults(event) {
+    event.preventDefault();
+    const sessionId = (typeof stepPage !== 'undefined' && stepPage?.sessionId) || window.API?.sessionId || localStorage.getItem('lastSessionId');
+    window.location.href = sessionId ? `results.html?session=${sessionId}` : 'results.html';
+}
+</script>
+</body>
+</html>

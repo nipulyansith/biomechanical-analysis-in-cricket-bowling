@@ -1,354 +1,315 @@
 <!DOCTYPE html>
-
-<html class="dark" lang="en"><head>
+<html class="dark" lang="en">
+<head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>PitchIQ - Coach's Dashboard</title>
+<title>PitchIQ — Cricket Bowling Biomechanics</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&amp;family=Manrope:wght@200..800&amp;family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=Manrope:wght@200..800&family=Lexend:wght@100..900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="assets/css/theme.css" rel="stylesheet"/>
 <script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    "colors": {
-                        "background": "#0e1417",
-                        "on-secondary-fixed-variant": "#00522e",
-                        "tertiary": "#abd600",
-                        "on-background": "#dee3e7",
-                        "on-tertiary-fixed-variant": "#3c4d00",
-                        "surface-variant": "#303639",
-                        "surface-bright": "#343a3d",
-                        "on-surface-variant": "#c2c7cc",
-                        "secondary": "#81d9a1",
-                        "tertiary-container": "#222d00",
-                        "inverse-on-surface": "#2b3135",
-                        "on-error-container": "#ffdad6",
-                        "on-tertiary-fixed": "#161e00",
-                        "error-container": "#93000a",
-                        "surface": "#0e1417",
-                        "surface-dim": "#0e1417",
-                        "on-primary": "#003547",
-                        "secondary-fixed": "#9df5bc",
-                        "tertiary-fixed": "#c3f400",
-                        "on-secondary-fixed": "#002110",
-                        "on-primary-fixed": "#001f2b",
-                        "surface-container-highest": "#303639",
-                        "primary-fixed": "#bfe8ff",
-                        "secondary-container": "#006a3d",
-                        "on-primary-container": "#6098b2",
-                        "secondary-fixed-dim": "#81d9a1",
-                        "primary-container": "#002d3d",
-                        "tertiary-fixed-dim": "#abd600",
-                        "inverse-primary": "#2a657e",
-                        "outline-variant": "#42484c",
-                        "surface-container": "#1a2024",
-                        "inverse-surface": "#dee3e7",
-                        "on-error": "#690005",
-                        "on-tertiary-container": "#7c9c00",
-                        "on-primary-fixed-variant": "#044d65",
-                        "outline": "#8c9196",
-                        "on-surface": "#dee3e7",
-                        "error": "#ffb4ab",
-                        "primary-fixed-dim": "#96ceeb",
-                        "surface-container-low": "#161c20",
-                        "on-tertiary": "#283500",
-                        "on-secondary": "#00391e",
-                        "surface-tint": "#96ceeb",
-                        "surface-container-lowest": "#090f12",
-                        "on-secondary-container": "#8fe7af",
-                        "surface-container-high": "#252b2e",
-                        "primary": "#96ceeb"
-                    },
-                    "borderRadius": {
-                        "DEFAULT": "0.125rem",
-                        "lg": "0.25rem",
-                        "xl": "0.5rem",
-                        "full": "1.5rem"
-                    },
-                    "fontFamily": {
-                        "headline": ["Space Grotesk"],
-                        "body": ["Manrope"],
-                        "label": ["Lexend"]
-                    }
-                },
-            },
-        }
-    </script>
-<style>
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        }
-        body {
-            background-color: #0e1417;
-            color: #dee3e7;
-            font-family: 'Manrope', sans-serif;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .safe-pb {
-            padding-bottom: env(safe-area-inset-bottom);
-        }
-    </style>
+  tailwind.config = {
+    darkMode: "class",
+    theme: { extend: {
+      colors: {
+        background: "#05070a", surface: "#0b0f17", "surface-high": "#10151f", "surface-highest": "#171d2b",
+        border: "#232a3a", primary: "#123a8c", "primary-soft": "#1a4fb4", "on-primary": "#eaf4ff",
+        accent: "#2e8fff", "accent-soft": "#5ec8ff", "on-accent": "#04101f",
+        red: "#e5484d", "red-soft": "#ff6b6f", blue: "#4fd6ff",
+        ink: "#eef3fb", muted: "#8b96a6", faint: "#56607a"
+      },
+      fontFamily: { headline: ["Space Grotesk"], body: ["Manrope"], label: ["Lexend"] }
+    }}
+  }
+</script>
 </head>
-<body class="min-h-screen pb-32">
-<!-- TopAppBar -->
-<header class="w-full top-0 sticky z-40 bg-[#0e1417]/90 backdrop-blur-md flex justify-between items-center px-6 py-4">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-[#96ceeb] text-2xl">speed</span>
-<h1 class="text-xl font-bold text-[#96ceeb] font-['Space_Grotesk'] tracking-tight">PitchIQ</h1>
-</div>
-<div class="flex items-center gap-4">
-<div class="hidden md:flex gap-6 mr-6">
-<a class="font-label text-sm text-[#abd600] hover:bg-[#252b2e] transition-colors rounded-lg px-2 py-1" href="#">Dashboard</a>
-<a class="font-label text-sm text-[#96ceeb] hover:bg-[#252b2e] transition-colors rounded-lg px-2 py-1" href="#">Sessions</a>
-<a class="font-label text-sm text-[#96ceeb] hover:bg-[#252b2e] transition-colors rounded-lg px-2 py-1" href="#">Settings</a>
-</div>
-<button class="w-11 h-11 rounded-full overflow-hidden border-2 border-primary-container focus:ring-2 ring-tertiary ring-offset-2 ring-offset-background outline-none transition-all">
-<img alt="User profile" class="w-full h-full object-cover" data-alt="Close-up portrait of a professional cricket coach with a confident expression in a high-tech athletic facility" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCXP1j9K0VW12WeuduJrkKTdVcXDB9Jc5BrS9uFbWrBcifmhBuRb3I3rDJhLbcJcLJTGk14jOVhM1WL46Mk_pNkvWi2Ius81N5M8wNwN_kF3Hjaah5jM9xtUnVsjj96Bf_d__D1F1o7jfbzMCrg_liiGWv5JbolglWGXQ4EYnTM6JWhs2cYooE3AMjmngpvjJ52iM9koUaswO9Gp1LuJLiUWRg_pNPIwTAX5R8WvzwW1ALRszc2q6n8Hn817nCrVbu89EwvQ_BRgHDO"/>
-</button>
-</div>
-</header>
-<main class="max-w-7xl mx-auto px-6 pt-6">
-<!-- Hero Action Section -->
-<section class="mb-10">
-<div class="max-w-2xl">
-<h2 class="font-headline text-4xl md:text-5xl font-bold text-on-surface tracking-tight mb-3">
-                    Performance <span class="text-tertiary underline decoration-tertiary/30 decoration-4 underline-offset-4">Analysis</span>
-</h2>
-<p class="font-body text-on-surface-variant text-base md:text-lg leading-relaxed">
-                    Optimize biomechanics through high-precision video tracking. 
-                    Upload sessions for skeletal mapping and speed data.
-                </p>
-</div>
-<!-- Upload Action Button -->
-<div class="mt-8 flex">
-<button onclick="window.location.href='upload.html'" class="w-full md:w-auto flex items-center justify-center gap-3 bg-tertiary text-on-tertiary px-8 py-4 md:px-8 md:py-4 rounded-full font-label font-bold text-lg md:text-base hover:bg-tertiary/90 active:scale-[0.98] transition-all shadow-[0_12px_24px_-8px_rgba(171,214,0,0.4)]">
-<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add_circle</span>
-        Upload New Video
-    </button>
-</div>
-</section>
-<!-- Stats Overview -->
-<div class="grid grid-cols-1 md:grid-cols-12 gap-5 mb-10">
-<div class="md:col-span-8 bg-surface-container-low rounded-[2rem] p-8 flex flex-col justify-between min-h-[220px] relative overflow-hidden shadow-sm border border-outline-variant/10">
-<div class="z-10">
-<span class="font-label text-xs text-tertiary tracking-widest uppercase mb-2 block font-bold">Weekly Velocity</span>
-<div class="flex items-baseline gap-2">
-<span class="font-headline text-6xl font-extrabold tracking-tighter">148.2</span>
-<span class="font-label text-lg text-on-surface-variant font-medium">KPH</span>
-</div>
-</div>
-<div class="z-10 mt-6 flex items-center gap-2 text-secondary bg-secondary-container/20 self-start px-3 py-1.5 rounded-full">
-<span class="material-symbols-outlined text-sm">trending_up</span>
-<span class="font-body text-sm font-semibold">+2.4% vs last week</span>
-</div>
-<div class="absolute top-0 right-0 w-2/3 h-full bg-gradient-to-l from-primary/10 to-transparent pointer-events-none"></div>
-</div>
-<div class="md:col-span-4 bg-surface-container-high rounded-[2rem] p-8 flex flex-col justify-between border-l-8 border-tertiary shadow-sm">
-<div>
-<span class="font-label text-xs text-on-surface-variant mb-1 block uppercase tracking-wider font-bold">Pending Analysis</span>
-<span class="font-headline text-4xl font-bold">12 Sessions</span>
-</div>
-<button class="mt-8 h-12 w-full md:w-auto font-label text-sm text-tertiary flex items-center justify-center gap-2 bg-tertiary/10 rounded-xl hover:bg-tertiary/20 transition-colors border border-tertiary/20">
-                    View Queue <span class="material-symbols-outlined text-sm">arrow_forward</span>
-</button>
-</div>
-</div>
-<!-- Recent Uploads Section -->
-<section>
-<div class="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
-<h3 class="font-headline text-2xl font-bold">Previous Sessions</h3>
-<div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-<button id="filter-all" class="whitespace-nowrap px-5 py-2.5 rounded-full bg-tertiary text-on-tertiary font-label text-xs font-bold shadow-md" onclick="filterSessions('all')">All Sessions</button>
-<button id="filter-completed" class="whitespace-nowrap px-5 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant font-label text-xs font-medium border border-outline-variant/10" onclick="filterSessions('completed')">Completed</button>
-</div>
-</div>
-<!-- Card Grid with improved spacing -->
-<div id="sessionsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-  <!-- Sessions will be loaded here by JavaScript -->
-  <div class="col-span-full text-center py-12">
-    <div class="inline-block">
-      <div class="animate-spin h-8 w-8 border-4 border-tertiary border-t-transparent rounded-full"></div>
+<body class="min-h-screen pb-24 md:pb-0">
+
+<div class="app-shell">
+  <!-- Sidebar (desktop) -->
+  <aside class="sidebar">
+    <svg class="sidebar__logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="13" fill="currentColor" opacity="0.15"/>
+      <circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="2"/>
+      <path d="M8 9c3 3 3 17 0 20M24 9c-3 3-3 17 0 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <nav class="sidebar__nav">
+      <a class="sidebar__item sidebar__item--active" href="dashboard.html">
+        <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">space_dashboard</span>
+        <span>Overview</span>
+      </a>
+      <a class="sidebar__item" href="upload.html">
+        <span class="material-symbols-outlined">add_circle</span>
+        <span>Analyse</span>
+      </a>
+      <a class="sidebar__item" href="results.html">
+        <span class="material-symbols-outlined">monitoring</span>
+        <span>Biomech</span>
+      </a>
+      <span class="sidebar__item sidebar__item--disabled" title="Available during an active analysis session">
+        <span class="material-symbols-outlined">crop_free</span>
+        <span>Calibrate</span>
+      </span>
+      <span class="sidebar__item sidebar__item--disabled" title="Available once a session has results">
+        <span class="material-symbols-outlined">description</span>
+        <span>Reports</span>
+      </span>
+    </nav>
+  </aside>
+
+  <main class="app-main">
+    <!-- Mobile-only compact top bar (sidebar is desktop-only) -->
+    <header class="pitchiq-header flex justify-between items-center px-6 py-4 md:hidden">
+      <div class="flex items-center gap-3">
+        <svg class="pitchiq-logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="13" fill="currentColor" opacity="0.15"/>
+          <circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="2"/>
+          <path d="M8 9c3 3 3 17 0 20M24 9c-3 3-3 17 0 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <h1 class="text-xl font-bold text-accent-soft font-headline tracking-tight">PitchIQ</h1>
+      </div>
+    </header>
+
+    <!-- COMMAND-CENTRE HERO -->
+    <section class="cine-hero hud-grid seam-watermark relative w-full px-6 md:px-12 pt-10 pb-14 md:pt-14 md:pb-20" data-parallax-root>
+      <div class="cine-content max-w-7xl mx-auto">
+        <div class="grid lg:grid-cols-[1.05fr_460px] gap-10 lg:gap-16 items-center">
+          <div class="order-2 lg:order-1">
+            <p class="section-eyebrow mb-3 fade-in-up flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full bg-accent pulse-dot"></span>
+              Bowling / 01 — Motion Analysis
+            </p>
+            <h2 class="font-headline text-4xl md:text-5xl font-bold text-ink tracking-tight mb-4 fade-in-up d1">
+              Delivery captured,<br/> <span class="text-accent-soft">frame by frame</span>
+            </h2>
+            <p class="font-body text-muted text-base leading-relaxed fade-in-up d2 max-w-md">
+              Pose-tracked joint kinematics, run-up timing, centre of mass and release speed — computed from a single side-on video.
+            </p>
+            <div class="mt-8 flex fade-in-up d3">
+              <button onclick="window.location.href='upload.html'" class="btn-primary flex items-center justify-center gap-3 px-7 py-3.5 text-base">
+                <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add_circle</span>
+                Upload New Video
+              </button>
+            </div>
+
+            <!-- Performance rail: latest completed session, only rendered if data exists -->
+            <div id="heroRailWrap" class="mt-10 fade-in-up d3 hidden">
+              <p class="session-strip__label mb-2">Latest Session</p>
+              <div id="heroRail" class="rail"></div>
+            </div>
+          </div>
+
+          <div class="order-1 lg:order-2 bowling-viz bowling-viz--large">
+            <div id="heroViz"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="max-w-7xl mx-auto px-6">
+      <!-- Previous Sessions -->
+      <section class="reveal pb-16">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+          <h3 class="font-headline text-2xl font-bold text-ink">Previous Sessions</h3>
+          <div class="flex gap-2">
+            <button id="filter-all" class="whitespace-nowrap px-5 py-2.5 rounded-full bg-accent text-on-accent font-label text-xs font-bold" onclick="filterSessions('all')">All Sessions</button>
+            <button id="filter-completed" class="whitespace-nowrap px-5 py-2.5 rounded-full bg-surface-high text-muted font-label text-xs font-medium border border-border" onclick="filterSessions('completed')">Completed</button>
+          </div>
+        </div>
+        <div id="sessionsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div class="col-span-full state-loading"><div class="spinner mb-3"></div>Loading previous sessions…</div>
+        </div>
+      </section>
     </div>
-    <p class="mt-4 text-on-surface-variant">Loading previous sessions...</p>
-  </div>
+  </main>
 </div>
-</section>
-</main>
-<!-- Floating Action Button (Mobile) -->
+
+<!-- FAB (mobile) -->
 <div class="fixed bottom-24 right-6 z-50 md:hidden">
-<a aria-label="Upload New Video" class="w-16 h-16 bg-tertiary text-on-tertiary rounded-full shadow-[0_12px_24px_-4px_rgba(171,214,0,0.6)] flex items-center justify-center active:scale-90 transition-transform focus:outline-none focus:ring-4 ring-tertiary/30" href="upload.html">
-<span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">add</span>
-</a>
+  <a aria-label="Upload New Video" class="w-16 h-16 bg-accent text-on-accent rounded-full shadow-[0_12px_24px_-4px_rgba(46,143,255,0.5)] flex items-center justify-center active:scale-90 transition-transform" href="upload.html">
+    <span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">add</span>
+  </a>
 </div>
-<!-- BottomNavBar -->
-<nav class="fixed bottom-0 w-full z-50 bg-background/90 backdrop-blur-xl border-t border-outline-variant/10 safe-pb md:hidden">
-<div class="flex justify-around items-center px-4 py-3">
-<a class="flex flex-col items-center justify-center gap-1 text-[#abd600] min-w-[64px] min-h-[48px]" href="#">
-<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
-<span class="font-['Lexend'] text-[10px] font-bold uppercase tracking-wider">Home</span>
-</a>
-<a class="flex flex-col items-center justify-center gap-1 text-[#96ceeb]/60 hover:text-tertiary min-w-[64px] min-h-[48px] transition-colors" href="#">
-<span class="material-symbols-outlined">history</span>
-<span class="font-['Lexend'] text-[10px] font-bold uppercase tracking-wider">History</span>
-</a>
-<a class="flex flex-col items-center justify-center gap-1 text-[#96ceeb]/60 hover:text-tertiary min-w-[64px] min-h-[48px] transition-colors" href="#">
-<span class="material-symbols-outlined">analytics</span>
-<span class="font-['Lexend'] text-[10px] font-bold uppercase tracking-wider">Stats</span>
-</a>
-<a class="flex flex-col items-center justify-center gap-1 text-[#96ceeb]/60 hover:text-tertiary min-w-[64px] min-h-[48px] transition-colors" href="#">
-<span class="material-symbols-outlined">settings</span>
-<span class="font-['Lexend'] text-[10px] font-bold uppercase tracking-wider">Config</span>
-</a>
-</div>
+
+<!-- BottomNavBar (mobile) -->
+<nav class="pitchiq-bottom-nav safe-pb md:hidden">
+  <div class="flex justify-around items-center px-4 py-3">
+    <a class="flex flex-col items-center justify-center gap-1 text-accent-soft min-w-[64px] min-h-[48px]" href="dashboard.html">
+      <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">space_dashboard</span>
+      <span class="font-label text-[10px] font-bold uppercase tracking-wider">Overview</span>
+    </a>
+    <a class="flex flex-col items-center justify-center gap-1 text-muted min-w-[64px] min-h-[48px]" href="upload.html">
+      <span class="material-symbols-outlined">add_circle</span>
+      <span class="font-label text-[10px] font-bold uppercase tracking-wider">Analyse</span>
+    </a>
+    <a class="flex flex-col items-center justify-center gap-1 text-muted min-w-[64px] min-h-[48px]" href="results.html">
+      <span class="material-symbols-outlined">monitoring</span>
+      <span class="font-label text-[10px] font-bold uppercase tracking-wider">Biomech</span>
+    </a>
+  </div>
 </nav>
 
 <script src="api-client.js"></script>
+<script src="assets/js/shared.js"></script>
 <script>
   let allSessions = [];
   let filteredSessions = [];
 
-  /**
-   * Load previous sessions from backend
-   */
   async function loadPreviousSessions() {
     try {
       const sessions = await window.API.getSessions();
       allSessions = sessions || [];
       filteredSessions = allSessions;
       renderSessions();
+      loadHeroIntel(allSessions);
     } catch (error) {
       console.error('Error loading sessions:', error);
-      const container = document.getElementById('sessionsContainer');
-      container.innerHTML = '<div class="col-span-full text-center py-12 text-red-400">Failed to load sessions</div>';
+      document.getElementById('sessionsContainer').innerHTML = '<div class="col-span-full state-error">Failed to load sessions</div>';
+      renderBowlingViz('heroViz', {});
     }
   }
 
-  /**
-   * Filter sessions by status
-   */
   function filterSessions(status) {
+    const allBtn = document.getElementById('filter-all');
+    const completedBtn = document.getElementById('filter-completed');
     if (status === 'all') {
       filteredSessions = allSessions;
-      document.getElementById('filter-all').classList.add('bg-tertiary', 'text-on-tertiary', 'shadow-md');
-      document.getElementById('filter-all').classList.remove('bg-surface-container-high', 'text-on-surface-variant', 'border');
-      document.getElementById('filter-completed').classList.remove('bg-tertiary', 'text-on-tertiary', 'shadow-md');
-      document.getElementById('filter-completed').classList.add('bg-surface-container-high', 'text-on-surface-variant', 'border');
-    } else if (status === 'completed') {
+      allBtn.className = 'whitespace-nowrap px-5 py-2.5 rounded-full bg-accent text-on-accent font-label text-xs font-bold';
+      completedBtn.className = 'whitespace-nowrap px-5 py-2.5 rounded-full bg-surface-high text-muted font-label text-xs font-medium border border-border';
+    } else {
       filteredSessions = allSessions.filter(s => s.status === 'completed');
-      document.getElementById('filter-completed').classList.add('bg-tertiary', 'text-on-tertiary', 'shadow-md');
-      document.getElementById('filter-completed').classList.remove('bg-surface-container-high', 'text-on-surface-variant', 'border');
-      document.getElementById('filter-all').classList.remove('bg-tertiary', 'text-on-tertiary', 'shadow-md');
-      document.getElementById('filter-all').classList.add('bg-surface-container-high', 'text-on-surface-variant', 'border');
+      completedBtn.className = 'whitespace-nowrap px-5 py-2.5 rounded-full bg-accent text-on-accent font-label text-xs font-bold';
+      allBtn.className = 'whitespace-nowrap px-5 py-2.5 rounded-full bg-surface-high text-muted font-label text-xs font-medium border border-border';
     }
     renderSessions();
   }
 
-  /**
-   * Render sessions to the DOM
-   */
   function renderSessions() {
     const container = document.getElementById('sessionsContainer');
-    
     if (filteredSessions.length === 0) {
-      container.innerHTML = '<div class="col-span-full text-center py-12 text-on-surface-variant">No sessions found</div>';
+      container.innerHTML = '<div class="col-span-full state-empty">No sessions yet — upload a bowling video to get started</div>';
       return;
     }
-
     container.innerHTML = filteredSessions.map(session => createSessionCard(session)).join('');
   }
 
-  /**
-   * Create HTML for a session card
-   */
   function createSessionCard(session) {
     const isCompleted = session.status === 'completed';
     const results = session.results || {};
     const createdAt = new Date(session.created_at);
     const dateStr = createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const timeStr = createdAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    
-    // Get wrist velocity if available
+
     const wristVelocity = results.wrist_velocity;
-    const speed = wristVelocity && wristVelocity.wrist_speed_at_release_kmh 
-      ? Math.round(wristVelocity.wrist_speed_at_release_kmh) 
-      : '-- ';
-    
+    const speed = wristVelocity && wristVelocity.wrist_speed_at_release_kmh
+      ? Math.round(wristVelocity.wrist_speed_at_release_kmh)
+      : '--';
+
     const armLabel = session.bowling_arm ? (session.bowling_arm.toUpperCase() === 'L' ? 'Left Arm' : 'Right Arm') : 'Unknown';
 
     if (isCompleted) {
       return `
-        <a href="results.html?session=${session.session_id}" class="group block bg-surface-container-low rounded-[2rem] overflow-hidden hover:bg-surface-container-high transition-all duration-300 border border-outline-variant/5 hover:border-outline-variant/20 shadow-lg">
-          <div class="relative h-56 w-full bg-gradient-to-br from-primary/20 to-tertiary/20 flex items-center justify-center">
-            <div class="text-center">
-              <span class="material-symbols-outlined text-primary text-6xl opacity-20">speed</span>
-            </div>
-            <div class="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent"></div>
-            <div class="absolute bottom-5 left-5">
-              <div class="flex items-center gap-2 bg-secondary/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-secondary/30">
-                <span class="w-2 h-2 rounded-full bg-secondary"></span>
-                <span class="font-label text-[10px] font-black text-secondary tracking-widest uppercase">Completed</span>
-              </div>
+        <a href="results.html?session=${session.session_id}" class="group block bg-surface rounded-2xl overflow-hidden hover:bg-surface-high transition-all duration-300 border border-border shadow-lg">
+          <div class="relative h-40 w-full bg-gradient-to-br from-primary/25 to-accent/10 flex items-center justify-center">
+            <span class="material-symbols-outlined text-accent-soft text-5xl opacity-30">sports_cricket</span>
+            <div class="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent"></div>
+            <div class="absolute bottom-4 left-4">
+              <span class="badge badge--primary"><span class="w-1.5 h-1.5 rounded-full bg-accent-soft"></span>Completed</span>
             </div>
           </div>
-          <div class="p-7">
-            <div class="flex justify-between items-start mb-6">
+          <div class="p-6">
+            <div class="flex justify-between items-start mb-5">
               <div>
-                <h4 class="font-headline text-2xl font-bold group-hover:text-tertiary transition-colors leading-tight">Session ${session.session_id.substring(0, 8)}</h4>
-                <p class="font-body text-xs text-on-surface-variant/80 mt-1">${dateStr} • ${timeStr}</p>
+                <h4 class="font-headline text-lg font-bold text-ink group-hover:text-accent-soft transition-colors leading-tight">Session ${session.session_id.substring(0, 8)}</h4>
+                <p class="font-body text-xs text-muted mt-1">${dateStr} • ${timeStr}</p>
               </div>
-              <span class="px-3 py-1 bg-primary/20 text-primary rounded-full font-label text-[10px] font-bold">${armLabel}</span>
+              <span class="badge badge--blue">${armLabel}</span>
             </div>
-            <div class="grid grid-cols-2 gap-4 pt-5 border-t border-outline-variant/10">
+            <div class="grid grid-cols-2 gap-4 pt-4 border-t border-border">
               <div>
-                <p class="font-label text-[10px] text-on-surface-variant/70 uppercase tracking-widest font-bold">Wrist Speed</p>
-                <p class="font-headline text-xl font-bold mt-1">${speed} <span class="text-xs font-body text-on-surface-variant font-normal">KPH</span></p>
+                <p class="stat-card__label">Release Speed</p>
+                <p class="font-headline text-lg font-bold text-ink mt-1">${speed} <span class="text-xs font-body text-muted font-normal">km/h</span></p>
               </div>
               <div>
-                <p class="font-label text-[10px] text-on-surface-variant/70 uppercase tracking-widest font-bold">Status</p>
-                <p class="font-headline text-xl font-bold mt-1 text-secondary">✓ Complete</p>
+                <p class="stat-card__label">Status</p>
+                <p class="font-headline text-lg font-bold text-accent-soft mt-1">Complete</p>
               </div>
             </div>
           </div>
         </a>
       `;
     } else {
-      // Processing state
       return `
-        <div class="group block bg-surface-container-low rounded-[2rem] overflow-hidden hover:bg-surface-container-high transition-all duration-300 border border-outline-variant/5 shadow-lg">
-          <div class="relative h-56 w-full">
-            <div class="absolute inset-0 flex flex-col items-center justify-center bg-background/20 backdrop-blur-sm">
-              <div class="bg-tertiary/10 backdrop-blur-xl p-4 rounded-full border border-tertiary/30 mb-3">
-                <span class="material-symbols-outlined text-tertiary animate-spin text-3xl">sync</span>
-              </div>
-              <span class="font-label text-[11px] font-black text-tertiary tracking-widest uppercase bg-tertiary/20 px-3 py-1 rounded-full border border-tertiary/20">Processing...</span>
-            </div>
+        <div class="block bg-surface rounded-2xl overflow-hidden border border-border shadow-lg">
+          <div class="relative h-40 w-full flex flex-col items-center justify-center gap-3 bg-surface-high">
+            <span class="material-symbols-outlined text-accent-soft animate-spin text-3xl">sync</span>
+            <span class="badge badge--accent">Processing…</span>
           </div>
-          <div class="p-7">
-            <div class="flex justify-between items-start mb-6">
-              <div>
-                <h4 class="font-headline text-2xl font-bold leading-tight">Session ${session.session_id.substring(0, 8)}</h4>
-                <p class="font-body text-xs text-on-surface-variant/80 mt-1">${dateStr} • ${timeStr}</p>
-              </div>
-            </div>
-            <div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden mt-2">
-              <div class="bg-tertiary h-full w-[45%] rounded-full shadow-[0_0_8px_rgba(171,214,0,0.4)]"></div>
-            </div>
-            <div class="flex justify-between mt-3">
-              <p class="font-label text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Analysis In Progress</p>
-              <p class="font-label text-[10px] text-tertiary font-bold">45%</p>
-            </div>
+          <div class="p-6">
+            <h4 class="font-headline text-lg font-bold text-ink leading-tight">Session ${session.session_id.substring(0, 8)}</h4>
+            <p class="font-body text-xs text-muted mt-1">${dateStr} • ${timeStr}</p>
+            <p class="font-label text-[10px] text-muted font-bold uppercase tracking-wider mt-4">Analysis in progress</p>
           </div>
         </div>
       `;
     }
   }
 
-  // Load sessions when page loads
+  /** Render the hero BowlingActionVisualization + rail from the latest completed session, if any. */
+  async function loadHeroIntel(sessions) {
+    const completed = (sessions || [])
+      .filter(s => s.status === 'completed')
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    if (!completed.length) {
+      renderBowlingViz('heroViz', {});
+      return;
+    }
+
+    const latest = completed[0];
+    const priorSessionId = window.API.sessionId;
+    try {
+      window.API.sessionId = latest.session_id;
+      const response = await window.API.getResults();
+      const results = response.results || {};
+
+      const elbow = results.elbow_flexion?.elbow_at_release;
+      const knee = results.knee_flexion?.knee_angle_at_release;
+      const comDx = results.head_position?.head_offset_at_FFC?.Dx_cm ?? results.head_position?.ffc_offset?.Dx_cm;
+
+      renderBowlingViz('heroViz', { elbow, knee, comDx });
+
+      const speedRaw = results.wrist_velocity?.wrist_speed_at_release_kmh;
+      const speed = speedRaw ? Math.round(speedRaw) : null;
+      const stepS = results.stride_duration?.avg_interval_s;
+      const strideM = results.delivery_stride?.stride_m;
+
+      const items = [
+        speed !== null ? { icon: 'speed', label: 'Release Speed', value: speed, unit: 'km/h' } : null,
+        (elbow !== undefined && elbow !== null) ? { icon: 'accessibility_new', label: 'Elbow at Release', value: Math.round(elbow), unit: '°' } : null,
+        (knee !== undefined && knee !== null) ? { icon: 'accessibility_new', label: 'Knee at Release', value: Math.round(knee), unit: '°' } : null,
+        (strideM !== undefined && strideM !== null) ? { icon: 'straighten', label: 'Stride Distance', value: formatNumber(strideM, 2), unit: 'm' } : null,
+      ].filter(Boolean);
+
+      if (items.length) {
+        document.getElementById('heroRail').innerHTML = items.map(it => `
+          <a href="results.html?session=${latest.session_id}" class="rail__item">
+            <span class="rail__label"><span class="material-symbols-outlined">${it.icon}</span>${it.label}</span>
+            <span class="rail__value tnum">${it.value}<span class="rail__unit"> ${it.unit}</span></span>
+          </a>
+        `).join('');
+        document.getElementById('heroRailWrap').classList.remove('hidden');
+      }
+    } catch (error) {
+      console.error('Error loading hero intel:', error);
+      renderBowlingViz('heroViz', {});
+    } finally {
+      window.API.sessionId = priorSessionId;
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', loadPreviousSessions);
 </script>
-
 </body>
 </html>
-</body></html>

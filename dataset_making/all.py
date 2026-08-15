@@ -18,6 +18,26 @@ import cv2
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+# PitchIQ black/electric-blue chart theme — applies to every figure this module renders.
+plt.rcParams.update({
+    "figure.facecolor": "#05070a",
+    "axes.facecolor": "#05070a",
+    "axes.edgecolor": "#3a4a68",
+    "axes.labelcolor": "#eef3fb",
+    "axes.titlecolor": "#eef3fb",
+    "axes.grid": True,
+    "grid.color": "#232a3a",
+    "grid.alpha": 0.5,
+    "text.color": "#eef3fb",
+    "xtick.color": "#8b96a6",
+    "ytick.color": "#8b96a6",
+    "legend.facecolor": "#0b0f17",
+    "legend.edgecolor": "#3a4a68",
+    "legend.labelcolor": "#eef3fb",
+    "axes.prop_cycle": plt.cycler(color=["#2e8fff", "#4fd6ff", "#5ec8ff"]),
+})
+
 import torch
 from ultralytics import YOLO
 from scipy.signal import savgol_filter, find_peaks
@@ -1479,17 +1499,17 @@ def run_elbow_flexion(df_xy, fps, events, bowling_wrist, video_path, width, heig
 
     png_path = out_path("elbow_full_plots.png")
     fig, axes = plt.subplots(2, 1, figsize=(12, 8))
-    axes[0].plot(times, angles, linewidth=1.5, color="deepskyblue")
-    axes[0].axvline(x=arm_back_t, linestyle="--", color="orange",
+    axes[0].plot(times, angles, linewidth=1.5, color="#2e8fff")
+    axes[0].axvline(x=arm_back_t, linestyle="--", color="#4fd6ff",
                     label=f"Arm-back (f{arm_back_frame})")
-    axes[0].axvline(x=rel_t, linestyle="--", color="red",
+    axes[0].axvline(x=rel_t, linestyle="--", color="#e5484d",
                     label=f"Release (f{release_frame})")
     axes[0].set_ylabel("Elbow Angle (deg)")
     axes[0].set_title(f"{arm_label} ARM — Elbow Angle (Full Clip)")
     axes[0].legend(); axes[0].grid(True, alpha=0.3)
-    axes[1].plot(times, vel, linewidth=1.5, color="orange")
-    axes[1].axvline(x=arm_back_t, linestyle="--", color="orange")
-    axes[1].axvline(x=rel_t, linestyle="--", color="red")
+    axes[1].plot(times, vel, linewidth=1.5, color="#4fd6ff")
+    axes[1].axvline(x=arm_back_t, linestyle="--", color="#4fd6ff")
+    axes[1].axvline(x=rel_t, linestyle="--", color="#e5484d")
     axes[1].axhline(y=0, alpha=0.3)
     axes[1].set_ylabel("Angular Velocity (deg/s)")
     axes[1].set_xlabel("Time (s)")
@@ -1678,9 +1698,9 @@ def run_knee_flexion(df_xy, df_conf, fps, events, knee_side, video_path, width, 
     plt.plot(df_knee["time_s"], df_knee["knee_angle_deg"],
              linewidth=1.5, color="limegreen")
     if ffc_t_val is not None:
-        plt.axvline(ffc_t_val, linestyle="--", color="blue", label=f"FFC (f{ffc_frame})")
+        plt.axvline(ffc_t_val, linestyle="--", color="#4fd6ff", label=f"FFC (f{ffc_frame})")
     if rel_t_val is not None:
-        plt.axvline(rel_t_val, linestyle=":", color="red", label=f"Release (f{release_frame})")
+        plt.axvline(rel_t_val, linestyle=":", color="#e5484d", label=f"Release (f{release_frame})")
     plt.xlabel("Time (s)"); plt.ylabel("Knee Angle (deg)")
     plt.title(f"{side_label} Knee Flexion — Full Clip")
     plt.legend(); plt.grid(True, alpha=0.3); plt.tight_layout()
@@ -1826,8 +1846,8 @@ def run_head_position(df_xy, fps, events, bowling_wrist,
         out_path("headDx_vs_time.csv"), index=False)
 
     plt.figure(figsize=(10,4))
-    plt.plot(seg["time_s"], seg["videoDx_cm"], linewidth=1.5, color="gold")
-    plt.axhline(0, linestyle="--", color="gray", alpha=0.5)
+    plt.plot(seg["time_s"], seg["videoDx_cm"], linewidth=1.5, color="#2e8fff")
+    plt.axhline(0, linestyle="--", color="#3a4a68", alpha=0.5)
     plt.xlabel("Time (s)"); plt.ylabel("Head Dx (cm)")
     plt.title("Head Horizontal Offset relative to Front Foot (FFC → Release)")
     plt.grid(True, alpha=0.3); plt.tight_layout()
@@ -2082,19 +2102,19 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
 
     rel_t = rel_frame2 / fps
     plt.figure(figsize=(10,4))
-    plt.plot(df_xy["time_s"], df_xy["wrist_speed_kmh_sm"], linewidth=1.5, color="cyan",
+    plt.plot(df_xy["time_s"], df_xy["wrist_speed_kmh_sm"], linewidth=1.5, color="#2e8fff",
              label=f"{arm.upper()} wrist speed")
-    plt.axvline(x=rel_t, linestyle="--", color="red", label="Release")
-    plt.axvline(x=near_frame/fps, linestyle=":", color="orange", label="Peak (near release)")
+    plt.axvline(x=rel_t, linestyle="--", color="#e5484d", label="Release")
+    plt.axvline(x=near_frame/fps, linestyle=":", color="#4fd6ff", label="Peak (near release)")
     plt.xlabel("Time (s)"); plt.ylabel("Speed (km/h)")
     plt.title(f"{arm.upper()} WRIST Speed vs Time")
     plt.legend(); plt.grid(True, alpha=0.3); plt.tight_layout()
     plt.savefig(out_path("wrist_speed_vs_time.png"), dpi=200); plt.close()
 
     plt.figure(figsize=(10,4))
-    plt.plot(df_xy["time_s"], omega_sm, linewidth=1.5, color="magenta",
+    plt.plot(df_xy["time_s"], omega_sm, linewidth=1.5, color="#4fd6ff",
              label=f"{arm.upper()} forearm angular vel")
-    plt.axvline(x=rel_t, linestyle="--", color="red", label="Release")
+    plt.axvline(x=rel_t, linestyle="--", color="#e5484d", label="Release")
     plt.xlabel("Time (s)"); plt.ylabel("Angular velocity (rad/s)")
     plt.title(f"{arm.upper()} FOREARM Angular Velocity vs Time")
     plt.legend(); plt.grid(True, alpha=0.3); plt.tight_layout()

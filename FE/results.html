@@ -3,242 +3,277 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Analysis Results - FastBowl Lab</title>
+<title>Biomechanics Observatory — PitchIQ</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700;800&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="assets/css/theme.css" rel="stylesheet"/>
 <script src="api-client.js"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: { extend: {
+      colors: {
+        background: "#05070a", surface: "#0b0f17", "surface-high": "#10151f", "surface-highest": "#171d2b",
+        border: "#232a3a", primary: "#123a8c", "primary-soft": "#1a4fb4", "on-primary": "#eaf4ff",
+        accent: "#2e8fff", "accent-soft": "#5ec8ff", "on-accent": "#04101f",
+        red: "#e5484d", "red-soft": "#ff6b6f", blue: "#4fd6ff",
+        ink: "#eef3fb", muted: "#8b96a6", faint: "#56607a"
+      },
+      fontFamily: { headline: ["Space Grotesk"], body: ["Manrope"], label: ["Lexend"] }
+    }}
+  }
+</script>
 <style>
-  .metric-card {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .metric-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 20px 40px rgba(150, 206, 235, 0.15);
-  }
+  .rail__value--compact { font-size: 1.2rem; }
+  #stride-value, #delivery-value, #elbow-value, #knee-value, #com-value, #wrist-value { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 </style>
 </head>
-<body class="bg-[#0e1417] text-[#dee3e7] min-h-screen">
+<body class="bg-background text-ink min-h-screen pb-24 md:pb-0">
 
-<header class="sticky top-0 z-50 bg-[#0e1417]/90 backdrop-blur-md flex justify-between items-center px-6 py-4 border-b border-[#42484c]/10">
-  <div class="flex items-center gap-3">
-    <span class="material-symbols-outlined text-primary text-2xl">speed</span>
-    <h1 class="font-['Space_Grotesk'] text-xl font-bold text-primary">FastBowl Lab</h1>
-  </div>
-  <div class="flex items-center gap-4">
-    <button onclick="downloadReport()" class="flex items-center gap-2 px-4 py-2 bg-[#96ceeb]/10 border border-[#96ceeb]/30 rounded-lg text-[#96ceeb] font-['Manrope'] text-sm hover:bg-[#96ceeb]/20">
-      <span class="material-symbols-outlined">download</span>
-      Download Report
-    </button>
-    <a href="/dashboard.html" class="text-[#c2c7cc] hover:text-[#dee3e7]">
-      <span class="material-symbols-outlined">home</span>
-    </a>
-  </div>
-</header>
+<div class="app-shell">
+  <aside class="sidebar">
+    <svg class="sidebar__logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="13" fill="currentColor" opacity="0.15"/>
+      <circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="2"/>
+      <path d="M8 9c3 3 3 17 0 20M24 9c-3 3-3 17 0 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <nav class="sidebar__nav">
+      <a class="sidebar__item" href="dashboard.html">
+        <span class="material-symbols-outlined">space_dashboard</span>
+        <span>Overview</span>
+      </a>
+      <a class="sidebar__item" href="upload.html">
+        <span class="material-symbols-outlined">add_circle</span>
+        <span>Analyse</span>
+      </a>
+      <a class="sidebar__item sidebar__item--active" href="results.html">
+        <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">monitoring</span>
+        <span>Biomech</span>
+      </a>
+      <span class="sidebar__item sidebar__item--disabled" title="Available during an active analysis session">
+        <span class="material-symbols-outlined">crop_free</span>
+        <span>Calibrate</span>
+      </span>
+      <a class="sidebar__item" href="#reports">
+        <span class="material-symbols-outlined">description</span>
+        <span>Reports</span>
+      </a>
+    </nav>
+  </aside>
 
-<main class="max-w-7xl mx-auto px-4 py-12">
-  
-  <!-- Results Header -->
-  <div class="mb-12">
-    <h2 class="font-['Space_Grotesk'] text-4xl font-bold mb-2">Biomechanics Analysis Complete</h2>
-    <p class="font-['Manrope'] text-[#c2c7cc] mb-4">Complete analysis of 6 key cricket bowling metrics</p>
-    <div class="flex flex-wrap gap-3">
-      <div class="px-4 py-2 bg-[#abd600]/10 border border-[#abd600]/30 rounded-full text-[#abd600] font-['Lexend'] text-xs font-semibold">
-        <span id="session-id">Session: Loading...</span>
+  <main class="app-main">
+    <header class="pitchiq-header flex justify-between items-center px-6 py-4 md:hidden">
+      <div class="flex items-center gap-3">
+        <svg class="pitchiq-logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="13" fill="currentColor" opacity="0.15"/>
+          <circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="2"/>
+          <path d="M8 9c3 3 3 17 0 20M24 9c-3 3-3 17 0 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <h1 class="font-headline text-xl font-bold text-accent-soft">PitchIQ</h1>
       </div>
-      <div class="px-4 py-2 bg-[#81d9a1]/10 border border-[#81d9a1]/30 rounded-full text-[#81d9a1] font-['Lexend'] text-xs font-semibold">
-        <span id="analysis-date">Date: Loading...</span>
+      <button onclick="downloadReport()" class="btn-secondary flex items-center gap-2 px-3 py-2 text-xs">
+        <span class="material-symbols-outlined text-lg">download</span>
+      </button>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 md:px-8 py-8 md:py-12">
+
+      <!-- Session identity + signature visualization -->
+      <div class="cine-hero hud-grid mb-10 rounded-3xl border border-border p-6 md:p-10 relative overflow-hidden" data-parallax-root>
+        <div class="cine-content relative grid lg:grid-cols-[1fr_320px] gap-8 items-center">
+          <div>
+            <p class="section-eyebrow mb-2 flex items-center gap-2 fade-in-up">
+              <span class="w-1.5 h-1.5 rounded-full bg-accent pulse-dot"></span>
+              Biomechanics Observatory
+            </p>
+            <h2 class="font-headline text-3xl md:text-4xl font-bold mb-5 text-ink fade-in-up d1">Full Delivery Breakdown</h2>
+            <div class="session-strip fade-in-up d2">
+              <div class="session-strip__field">
+                <span class="session-strip__label">Session</span>
+                <span class="session-strip__value tnum" id="session-id">Loading…</span>
+              </div>
+              <div class="session-strip__field">
+                <span class="session-strip__label">Date</span>
+                <span class="session-strip__value" id="analysis-date">Loading…</span>
+              </div>
+              <div class="session-strip__field">
+                <span class="session-strip__label">Status</span>
+                <span class="session-strip__value text-accent-soft">Analysis Complete</span>
+              </div>
+            </div>
+            <div class="flex gap-3 mt-6 fade-in-up d3">
+              <button onclick="downloadReport()" class="btn-secondary hidden md:flex items-center gap-2 px-4 py-2.5 text-sm">
+                <span class="material-symbols-outlined text-lg">download</span>
+                Download Report
+              </button>
+              <a href="dashboard.html" class="text-muted hover:text-ink transition-colors flex items-center gap-2 px-2 py-2.5 text-sm">
+                <span class="material-symbols-outlined">home</span> Dashboard
+              </a>
+            </div>
+          </div>
+          <div class="bowling-viz bowling-viz--medium">
+            <div id="resultsViz"></div>
+          </div>
+        </div>
       </div>
+
+      <!-- Performance rail -->
+      <section class="mb-12 reveal">
+        <div class="group-heading flex items-center gap-2 mb-3">
+          <span class="material-symbols-outlined text-accent text-lg">bolt</span>
+          <h3 class="font-label text-xs font-bold uppercase tracking-widest text-muted">Performance Rail</h3>
+        </div>
+        <div class="rail">
+          <a href="stride-duration.html" class="metric-card rail__item">
+            <span class="rail__label"><span class="material-symbols-outlined">directions_run</span>Step Duration</span>
+            <span id="stride-value" class="rail__value rail__value--compact tnum">--.-- s</span>
+          </a>
+          <a href="delivery-stride.html" class="metric-card rail__item">
+            <span class="rail__label"><span class="material-symbols-outlined">speed</span>Delivery Stride</span>
+            <span id="delivery-value" class="rail__value rail__value--compact tnum">--.-- m</span>
+          </a>
+          <a href="elbow-flexion.html" class="metric-card rail__item">
+            <span class="rail__label"><span class="material-symbols-outlined">self_improvement</span>Elbow Flexion</span>
+            <span id="elbow-value" class="rail__value rail__value--compact tnum">--° to --°</span>
+          </a>
+          <a href="knee-flexion.html" class="metric-card rail__item">
+            <span class="rail__label"><span class="material-symbols-outlined">self_improvement</span>Knee Flexion</span>
+            <span id="knee-value" class="rail__value rail__value--compact tnum">--° to --°</span>
+          </a>
+          <a href="com.html" class="metric-card rail__item">
+            <span class="rail__label"><span class="material-symbols-outlined">hub</span>Centre of Mass</span>
+            <span id="com-value" class="rail__value rail__value--compact tnum">--.- cm</span>
+          </a>
+          <a href="velocity.html" class="metric-card rail__item">
+            <span class="rail__label"><span class="material-symbols-outlined">speed</span>Wrist Velocity</span>
+            <span id="wrist-value" class="rail__value rail__value--compact tnum">-- km/h</span>
+          </a>
+        </div>
+      </section>
+
+      <!-- Analysis timeline (real bowling-action phases) -->
+      <section class="mb-12 reveal">
+        <div class="group-heading flex items-center gap-2 mb-1">
+          <span class="material-symbols-outlined text-accent text-lg">timeline</span>
+          <h3 class="font-headline text-xl font-bold text-ink">Analysis Timeline</h3>
+        </div>
+        <p class="font-body text-muted text-sm mb-5">Pose-tracked keyframes at the four bowling-action reference phases</p>
+        <div id="poseFramesContainer" class="timeline">
+          <div class="state-loading"><div class="spinner mb-3"></div>Loading pose keyframes…</div>
+        </div>
+      </section>
+
+      <!-- Reports & Downloads -->
+      <section id="reports" class="section-card reveal scroll-mt-8">
+        <h3 class="font-headline text-2xl font-bold mb-6 text-ink">Reports &amp; Downloads</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <button onclick="downloadFile('stride_video')" class="flex items-center gap-3 p-4 rounded-xl bg-surface-high hover:bg-surface-highest border border-border transition-colors">
+            <span class="material-symbols-outlined text-accent-soft">video_library</span>
+            <div class="text-left">
+              <p class="font-body text-sm font-semibold text-ink">Step Cadence Video</p>
+              <p class="font-label text-xs text-faint">Annotated MP4</p>
+            </div>
+          </button>
+          <button onclick="downloadFile('delivery_video')" class="flex items-center gap-3 p-4 rounded-xl bg-surface-high hover:bg-surface-highest border border-border transition-colors">
+            <span class="material-symbols-outlined text-accent-soft">video_library</span>
+            <div class="text-left">
+              <p class="font-body text-sm font-semibold text-ink">Delivery Stride Video</p>
+              <p class="font-label text-xs text-faint">Annotated MP4</p>
+            </div>
+          </button>
+          <button onclick="downloadFile('elbow_video')" class="flex items-center gap-3 p-4 rounded-xl bg-surface-high hover:bg-surface-highest border border-border transition-colors">
+            <span class="material-symbols-outlined text-accent-soft">video_library</span>
+            <div class="text-left">
+              <p class="font-body text-sm font-semibold text-ink">Elbow Analysis Video</p>
+              <p class="font-label text-xs text-faint">Annotated MP4</p>
+            </div>
+          </button>
+          <button onclick="downloadFile('knee_video')" class="flex items-center gap-3 p-4 rounded-xl bg-surface-high hover:bg-surface-highest border border-border transition-colors">
+            <span class="material-symbols-outlined text-accent-soft">video_library</span>
+            <div class="text-left">
+              <p class="font-body text-sm font-semibold text-ink">Knee Analysis Video</p>
+              <p class="font-label text-xs text-faint">Annotated MP4</p>
+            </div>
+          </button>
+          <button onclick="downloadFile('head_video')" class="flex items-center gap-3 p-4 rounded-xl bg-surface-high hover:bg-surface-highest border border-border transition-colors">
+            <span class="material-symbols-outlined text-accent-soft">video_library</span>
+            <div class="text-left">
+              <p class="font-body text-sm font-semibold text-ink">Head Position Video</p>
+              <p class="font-label text-xs text-faint">Annotated MP4</p>
+            </div>
+          </button>
+          <button onclick="downloadAllData()" class="flex items-center gap-3 p-4 rounded-xl bg-accent/10 hover:bg-accent/20 border border-accent/30 transition-colors">
+            <span class="material-symbols-outlined text-accent-soft">archive</span>
+            <div class="text-left">
+              <p class="font-body text-sm font-semibold text-accent-soft">All Data &amp; CSVs</p>
+              <p class="font-label text-xs text-faint">Complete dataset</p>
+            </div>
+          </button>
+        </div>
+      </section>
+
+      <div class="flex gap-4 mt-12 justify-center">
+        <a href="dashboard.html" class="btn-secondary px-8 py-3">Back to Dashboard</a>
+        <a href="upload.html" class="btn-primary px-8 py-3">Analyse Another Video</a>
+      </div>
+
     </div>
-  </div>
+  </main>
+</div>
 
-  <!-- Main Metrics Grid -->
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-    
-    <!-- Stride Duration Card -->
-    <a href="stride-duration.html" class="metric-card group relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 to-secondary/10 border border-primary/30 p-6 block">
-      <div class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-      <div class="relative z-10">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="font-['Space_Grotesk'] text-xl font-bold text-primary">Step Duration</h3>
-          <span class="material-symbols-outlined text-primary text-2xl">directions_run</span>
-        </div>
-        <p class="font-['Manrope'] text-[#c2c7cc] text-sm mb-4">Timing and cadence of final 5 steps leading to release</p>
-        <div id="stride-value" class="text-3xl font-bold text-primary">--.-- s</div>
-        <p class="font-['Lexend'] text-xs text-[#8c9196] mt-2">→ View detailed analysis</p>
-      </div>
+<nav class="pitchiq-bottom-nav safe-pb md:hidden">
+  <div class="flex justify-around items-center px-4 py-3">
+    <a class="flex flex-col items-center justify-center gap-1 text-muted min-w-[64px] min-h-[48px]" href="dashboard.html">
+      <span class="material-symbols-outlined">space_dashboard</span>
+      <span class="font-label text-[10px] font-bold uppercase tracking-wider">Overview</span>
     </a>
-
-    <!-- Delivery Stride Card -->
-    <a href="delivery-stride.html" class="metric-card group relative overflow-hidden rounded-2xl bg-gradient-to-br from-secondary/10 to-primary/10 border border-secondary/30 p-6 block">
-      <div class="absolute inset-0 bg-gradient-to-br from-secondary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-      <div class="relative z-10">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="font-['Space_Grotesk'] text-xl font-bold text-secondary">Delivery Stride</h3>
-          <span class="material-symbols-outlined text-secondary text-2xl">speed</span>
-        </div>
-        <p class="font-['Manrope'] text-[#c2c7cc] text-sm mb-4">Distance covered in single delivery stride</p>
-        <div id="delivery-value" class="text-3xl font-bold text-secondary">--.-- m</div>
-        <p class="font-['Lexend'] text-xs text-[#8c9196] mt-2">→ View detailed analysis</p>
-      </div>
+    <a class="flex flex-col items-center justify-center gap-1 text-muted min-w-[64px] min-h-[48px]" href="upload.html">
+      <span class="material-symbols-outlined">add_circle</span>
+      <span class="font-label text-[10px] font-bold uppercase tracking-wider">Analyse</span>
     </a>
-
-    <!-- Elbow Flexion Card -->
-    <a href="elbow-flexion.html" class="metric-card group relative overflow-hidden rounded-2xl bg-gradient-to-br from-tertiary/10 to-primary/10 border border-tertiary/30 p-6 block">
-      <div class="absolute inset-0 bg-gradient-to-br from-tertiary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-      <div class="relative z-10">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="font-['Space_Grotesk'] text-xl font-bold text-tertiary">Elbow Flexion</h3>
-          <span class="material-symbols-outlined text-tertiary text-2xl">self_improvement</span>
-        </div>
-        <p class="font-['Manrope'] text-[#c2c7cc] text-sm mb-4">Elbow angle dynamics and extension</p>
-        <div id="elbow-value" class="text-3xl font-bold text-tertiary">--° to --°</div>
-        <p class="font-['Lexend'] text-xs text-[#8c9196] mt-2">→ View detailed analysis</p>
-      </div>
-    </a>
-
-    <!-- Knee Flexion Card -->
-    <a href="knee-flexion.html" class="metric-card group relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 to-tertiary/10 border border-primary/30 p-6 block">
-      <div class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-      <div class="relative z-10">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="font-['Space_Grotesk'] text-xl font-bold text-primary">Knee Flexion</h3>
-          <span class="material-symbols-outlined text-primary text-2xl">self_improvement</span>
-        </div>
-        <p class="font-['Manrope'] text-[#c2c7cc] text-sm mb-4">Front knee angle at key phases</p>
-        <div id="knee-value" class="text-3xl font-bold text-primary">--° to --°</div>
-        <p class="font-['Lexend'] text-xs text-[#8c9196] mt-2">→ View detailed analysis</p>
-      </div>
-    </a>
-
-    <!-- Center of Mass Card -->
-    <a href="com.html" class="metric-card group relative overflow-hidden rounded-2xl bg-gradient-to-br from-secondary/10 to-tertiary/10 border border-secondary/30 p-6 block">
-      <div class="absolute inset-0 bg-gradient-to-br from-secondary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-      <div class="relative z-10">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="font-['Space_Grotesk'] text-xl font-bold text-secondary">Center of Mass</h3>
-          <span class="material-symbols-outlined text-secondary text-2xl">hub</span>
-        </div>
-        <p class="font-['Manrope'] text-[#c2c7cc] text-sm mb-4">Head position and body alignment</p>
-        <div id="com-value" class="text-3xl font-bold text-secondary">--.- cm</div>
-        <p class="font-['Lexend'] text-xs text-[#8c9196] mt-2">→ View detailed analysis</p>
-      </div>
-    </a>
-
-    <!-- Wrist Velocity Card -->
-    <a href="velocity.html" class="metric-card group relative overflow-hidden rounded-2xl bg-gradient-to-br from-tertiary/10 to-secondary/10 border border-tertiary/30 p-6 block">
-      <div class="absolute inset-0 bg-gradient-to-br from-tertiary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-      <div class="relative z-10">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="font-['Space_Grotesk'] text-xl font-bold text-tertiary">Wrist Velocity</h3>
-          <span class="material-symbols-outlined text-tertiary text-2xl">speed</span>
-        </div>
-        <p class="font-['Manrope'] text-[#c2c7cc] text-sm mb-4">Ball speed at release and peak wrist speed</p>
-        <div id="wrist-value" class="text-3xl font-bold text-tertiary">-- km/h</div>
-        <p class="font-['Lexend'] text-xs text-[#8c9196] mt-2">→ View detailed analysis</p>
-      </div>
+    <a class="flex flex-col items-center justify-center gap-1 text-accent-soft min-w-[64px] min-h-[48px]" href="results.html">
+      <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">monitoring</span>
+      <span class="font-label text-[10px] font-bold uppercase tracking-wider">Biomech</span>
     </a>
   </div>
+</nav>
 
-  <!-- Download Section -->
-  <section class="bg-[#1a2024]/50 border border-[#42484c]/30 rounded-2xl p-8">
-    <h3 class="font-['Space_Grotesk'] text-2xl font-bold mb-6">Download Results</h3>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      <button onclick="downloadFile('stride_video')" class="flex items-center gap-3 p-4 rounded-xl bg-[#252b2e] hover:bg-[#303639] border border-[#42484c]/30 transition-colors">
-        <span class="material-symbols-outlined text-tertiary">video_library</span>
-        <div class="text-left">
-          <p class="font-['Manrope'] text-sm font-semibold">Step Cadence Video</p>
-          <p class="font-['Lexend'] text-xs text-[#8c9196]">Annotated MP4</p>
-        </div>
-      </button>
-      <button onclick="downloadFile('delivery_video')" class="flex items-center gap-3 p-4 rounded-xl bg-[#252b2e] hover:bg-[#303639] border border-[#42484c]/30 transition-colors">
-        <span class="material-symbols-outlined text-tertiary">video_library</span>
-        <div class="text-left">
-          <p class="font-['Manrope'] text-sm font-semibold">Delivery Stride Video</p>
-          <p class="font-['Lexend'] text-xs text-[#8c9196]">Annotated MP4</p>
-        </div>
-      </button>
-      <button onclick="downloadFile('elbow_video')" class="flex items-center gap-3 p-4 rounded-xl bg-[#252b2e] hover:bg-[#303639] border border-[#42484c]/30 transition-colors">
-        <span class="material-symbols-outlined text-tertiary">video_library</span>
-        <div class="text-left">
-          <p class="font-['Manrope'] text-sm font-semibold">Elbow Analysis Video</p>
-          <p class="font-['Lexend'] text-xs text-[#8c9196]">Annotated MP4</p>
-        </div>
-      </button>
-      <button onclick="downloadFile('knee_video')" class="flex items-center gap-3 p-4 rounded-xl bg-[#252b2e] hover:bg-[#303639] border border-[#42484c]/30 transition-colors">
-        <span class="material-symbols-outlined text-tertiary">video_library</span>
-        <div class="text-left">
-          <p class="font-['Manrope'] text-sm font-semibold">Knee Analysis Video</p>
-          <p class="font-['Lexend'] text-xs text-[#8c9196]">Annotated MP4</p>
-        </div>
-      </button>
-      <button onclick="downloadFile('head_video')" class="flex items-center gap-3 p-4 rounded-xl bg-[#252b2e] hover:bg-[#303639] border border-[#42484c]/30 transition-colors">
-        <span class="material-symbols-outlined text-tertiary">video_library</span>
-        <div class="text-left">
-          <p class="font-['Manrope'] text-sm font-semibold">Head Position Video</p>
-          <p class="font-['Lexend'] text-xs text-[#8c9196]">Annotated MP4</p>
-        </div>
-      </button>
-      <button onclick="downloadAllData()" class="flex items-center gap-3 p-4 rounded-xl bg-[#abd600]/10 hover:bg-[#abd600]/20 border border-[#abd600]/30 transition-colors">
-        <span class="material-symbols-outlined text-[#abd600]">archive</span>
-        <div class="text-left">
-          <p class="font-['Manrope'] text-sm font-semibold text-[#abd600]">All Data & CSVs</p>
-          <p class="font-['Lexend'] text-xs text-[#8c9196]">Complete dataset</p>
-        </div>
-      </button>
-    </div>
-  </section>
-
-  <!-- Action Buttons -->
-  <div class="flex gap-4 mt-12 justify-center">
-    <a href="/dashboard.html" class="px-8 py-3 bg-[#252b2e] border border-[#42484c]/30 rounded-lg text-[#dee3e7] font-['Manrope'] font-semibold hover:bg-[#303639] transition-colors">
-      Back to Dashboard
-    </a>
-    <a href="/upload.html" class="px-8 py-3 bg-[#abd600] text-[#161e00] rounded-lg font-['Manrope'] font-semibold hover:bg-[#c3f400] transition-colors">
-      Analyse Another Video
-    </a>
-  </div>
-
-</main>
-
+<script src="assets/js/shared.js"></script>
 <script>
-// Initialize when DOM is ready and API client is loaded
+renderBowlingViz('resultsViz', {});
+
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    // Wait a tick to ensure window.API is initialized
     await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Check if API client is available
+
     if (!window.API) {
       throw new Error('API client not initialized. api-client.js may not have loaded.');
     }
-    
-    // Get session ID from URL or storage
+
     let sessionId = window.API.sessionId;
-    
+
     if (!sessionId) {
       console.log('⏳ No session ID found, attempting to load most recent session...');
       sessionId = await loadMostRecentSession();
       if (!sessionId) {
         console.error('❌ No session ID found and no recent sessions available');
-        document.getElementById('session-id').textContent = 'Session: Not Available';
-        document.getElementById('analysis-date').textContent = 'Date: ' + new Date().toLocaleDateString();
-        showError('No session ID found. Please start a new analysis.');
+        document.getElementById('session-id').textContent = 'Not Available';
+        document.getElementById('analysis-date').textContent = new Date().toLocaleDateString();
+        showToast('No session ID found. Please start a new analysis.');
         return;
       }
-      // Update API client with the loaded session ID
       window.API.sessionId = sessionId;
       console.log('✅ Loaded most recent session:', sessionId);
     }
-    
+
     console.log('📊 Loading results for session:', sessionId);
-    document.getElementById('session-id').textContent = `Session: ${sessionId}`;
-    document.getElementById('analysis-date').textContent = `Date: ${new Date().toLocaleDateString()}`;
-    
-    // Update all metric card links to include session ID
+    document.getElementById('session-id').textContent = sessionId;
+    document.getElementById('analysis-date').textContent = new Date().toLocaleDateString();
+
     updateMetricCardLinks(sessionId);
-    
-    // Load results
+    loadPoseFrames(sessionId);
+
     try {
       const response = await window.API.getResults();
       if (response.success && response.results) {
@@ -246,75 +281,91 @@ document.addEventListener('DOMContentLoaded', async () => {
         populateResults(response.results);
       } else {
         console.error('❌ No results found:', response);
-        showError('Could not load analysis results. Status: ' + (response.error || 'Unknown error'));
+        showToast('Could not load analysis results. Status: ' + (response.error || 'Unknown error'));
       }
     } catch (apiError) {
       console.error('❌ API Error:', apiError);
       if (apiError.message.includes('not found')) {
-        showError('Analysis session not found on server. Please start a new analysis.');
+        showToast('Analysis session not found on server. Please start a new analysis.');
       } else if (apiError.message.includes('not completed')) {
-        showError('Analysis is still processing. Please wait and refresh the page.');
+        showToast('Analysis is still processing. Please wait and refresh the page.');
       } else {
-        showError('Failed to load results: ' + apiError.message);
+        showToast('Failed to load results: ' + apiError.message);
       }
     }
   } catch (error) {
     console.error('❌ Initialization error:', error);
-    showError('Failed to initialize: ' + error.message);
+    showToast('Failed to initialize: ' + error.message);
   }
-  
-  // Save session ID to localStorage for later use
+
   let sessionId = window.API.sessionId;
   if (sessionId) {
     localStorage.setItem('lastSessionId', sessionId);
     console.log('💾 Saved session ID to localStorage:', sessionId);
   }
-  
-  // Setup navigation
-  setupNavigationButtons(sessionId);
 });
 
-function setupNavigationButtons(sessionId) {
-  const navButtons = document.querySelectorAll('nav > div');
-  navButtons.forEach((button, index) => {
-    button.style.cursor = 'pointer';
-    button.addEventListener('click', () => {
-      if (index === 1) {
-        // Sessions button - go to home/index
-        window.location.href = 'index.html';
-      }
-      // Other buttons don't navigate yet
-    });
-  });
-}
-
 function updateMetricCardLinks(sessionId) {
-  console.log('🔗 Updating metric card links with session ID:', sessionId);
-  
-  // Get all metric card links
   const metricCards = document.querySelectorAll('.metric-card');
-  
   metricCards.forEach(card => {
     const href = card.getAttribute('href');
     if (href && !href.includes('?session=')) {
-      // Append session ID to the link
-      const newHref = `${href}?session=${sessionId}`;
-      card.setAttribute('href', newHref);
-      console.log(`✅ Updated link: ${href} → ${newHref}`);
+      card.setAttribute('href', `${href}?session=${sessionId}`);
     }
   });
+}
+
+const POSE_PHASES = [
+  { label: 'start', title: 'Start', icon: 'flag' },
+  { label: 'bfc', title: 'Back Foot Contact', icon: 'foot_bones' },
+  { label: 'ffc', title: 'Front Foot Contact', icon: 'foot_bones' },
+  { label: 'release', title: 'Ball Release', icon: 'sports_baseball' }
+];
+
+async function loadPoseFrames(sessionId) {
+  const container = document.getElementById('poseFramesContainer');
+  try {
+    const result = await window.API.getKeypoints();
+    if (!result.success || !result.data || !result.data.frames || result.data.frames.length === 0) {
+      container.innerHTML = '<div class="state-empty">Pose keyframes not available for this session</div>';
+      return;
+    }
+    const framesByLabel = {};
+    result.data.frames.forEach(f => { framesByLabel[f.label] = f; });
+
+    const phaseItems = POSE_PHASES.map((phase, i) => {
+      const frame = framesByLabel[phase.label];
+      if (!frame) return '';
+      const imgUrl = window.API.getKeypointFrameUrl(phase.label);
+      return `
+        <div class="timeline__phase timeline__phase--active">
+          <span class="timeline__dot"></span>
+          <span class="timeline__label">${phase.title}</span>
+          <div class="timeline__frame hud-frame">
+            <img src="${imgUrl}" alt="${phase.title} pose" loading="lazy"/>
+          </div>
+          <span class="font-body text-xs text-faint tnum">Frame ${frame.frame_number ?? '--'}</span>
+        </div>
+      `;
+    }).join('');
+
+    if (!phaseItems) {
+      container.innerHTML = '<div class="state-empty">Pose keyframes not available for this session</div>';
+      return;
+    }
+
+    container.innerHTML = `<div class="timeline__track grid grid-cols-2 md:grid-cols-4 gap-6">${phaseItems}</div>`;
+  } catch (error) {
+    console.warn('Pose keyframes unavailable:', error);
+    container.innerHTML = '<div class="state-empty">Pose keyframes not available for this session</div>';
+  }
 }
 
 async function loadMostRecentSession() {
   try {
     const sessions = await window.API.getSessions();
     if (sessions && sessions.length > 0) {
-      // Sort by created_at in descending order (most recent first)
-      const sorted = sessions.sort((a, b) => {
-        const dateA = new Date(a.created_at);
-        const dateB = new Date(b.created_at);
-        return dateB - dateA;
-      });
+      const sorted = sessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       const mostRecent = sorted[0];
       console.log('✅ Most recent session found:', mostRecent.session_id);
       return mostRecent.session_id;
@@ -325,233 +376,141 @@ async function loadMostRecentSession() {
   return null;
 }
 
-function showError(message) {
-  console.error('Error:', message);
-  // Optionally show error in UI
-  const errorDiv = document.createElement('div');
-  errorDiv.className = 'fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg';
-  errorDiv.textContent = message;
-  document.body.appendChild(errorDiv);
-  setTimeout(() => errorDiv.remove(), 5000);
-}
-
 function populateResults(results) {
   console.log('📊 Received results:', results);
   console.log('Keys available:', Object.keys(results));
-  
+
   try {
-    // Stride Duration - cadence returns { duration_s, avg_interval_s, intervals_s }
     if (results.stride_duration) {
-      console.log('Stride duration data:', results.stride_duration);
       const duration = results.stride_duration.duration_s;
       if (duration !== null && duration !== undefined && !isNaN(duration)) {
         document.getElementById('stride-value').textContent = parseFloat(duration).toFixed(3) + ' s';
-        console.log('✅ Stride Duration:', parseFloat(duration).toFixed(3) + ' s');
-      } else {
-        console.warn('⚠️ Invalid duration_s:', duration, 'in:', results.stride_duration);
       }
-    } else {
-      console.warn('⚠️ No stride_duration data found');
     }
 
-    // Delivery Stride - stride returns { stride_m, stride_duration_s, ... }
     if (results.delivery_stride) {
-      console.log('Delivery stride data:', results.delivery_stride);
       const distance = results.delivery_stride.stride_m;
       if (distance !== null && distance !== undefined && !isNaN(distance)) {
         document.getElementById('delivery-value').textContent = parseFloat(distance).toFixed(2) + ' m';
-        console.log('✅ Delivery Stride:', parseFloat(distance).toFixed(2) + ' m');
-      } else {
-        console.warn('⚠️ Invalid stride_m:', distance, 'in:', results.delivery_stride);
       }
-    } else {
-      console.warn('⚠️ No delivery_stride data found');
     }
 
-    // Elbow Flexion - elbow returns frame_to_angle with all frames
+    let elbowRelease = null;
     if (results.elbow_flexion && results.elbow_flexion.frame_to_angle) {
-      console.log('Elbow flexion data:', results.elbow_flexion);
       const frames = results.elbow_flexion.frame_to_angle;
       const angles = Object.values(frames).filter(a => typeof a === 'number');
-      
       if (angles.length > 0) {
-        const minAngle = Math.min(...angles);
-        const maxAngle = Math.max(...angles);
-        const minRound = Math.round(minAngle);
-        const maxRound = Math.round(maxAngle);
+        const minRound = Math.round(Math.min(...angles));
+        const maxRound = Math.round(Math.max(...angles));
         document.getElementById('elbow-value').textContent = minRound + '° to ' + maxRound + '°';
-        console.log('✅ Elbow Flexion:', minRound + '° to ' + maxRound + '°');
-      } else {
-        console.warn('⚠️ No numeric angles found in frame_to_angle');
       }
-    } else {
-      console.warn('⚠️ No elbow_flexion data found');
+    }
+    if (results.elbow_flexion && results.elbow_flexion.elbow_at_release !== undefined) {
+      elbowRelease = results.elbow_flexion.elbow_at_release;
     }
 
-    // Knee Flexion - show angle at FFC and extension value
+    let kneeRelease = null;
     if (results.knee_flexion) {
-      console.log('Knee flexion data:', results.knee_flexion);
-      
       const ffc_angle = parseFloat(results.knee_flexion.knee_angle_at_ffc);
       const release_angle = parseFloat(results.knee_flexion.knee_angle_at_release);
       const extension = parseFloat(results.knee_flexion.knee_extension);
-      
-      // Display: angle at FFC and extension change
+      kneeRelease = !isNaN(release_angle) ? release_angle : null;
+
       if (!isNaN(ffc_angle) && !isNaN(extension)) {
-        const ffc_round = Math.round(ffc_angle);
-        const ext_round = Math.round(extension);
         const sign = extension >= 0 ? '+' : '';
-        document.getElementById('knee-value').textContent = ffc_round + '° (FFC)  ' + sign + ext_round + '°';
-        console.log('✅ Knee Flexion:', ffc_round + '° at FFC,', sign + ext_round + '° extension');
-      } 
-      // Fallback if only release/extension available
-      else if (!isNaN(release_angle) && !isNaN(extension)) {
-        const rel_round = Math.round(release_angle);
-        const ext_round = Math.round(extension);
+        document.getElementById('knee-value').textContent = Math.round(ffc_angle) + '° (FFC)  ' + sign + Math.round(extension) + '°';
+      } else if (!isNaN(release_angle) && !isNaN(extension)) {
         const sign = extension >= 0 ? '+' : '';
-        document.getElementById('knee-value').textContent = rel_round + '° (Rel)  ' + sign + ext_round + '°';
-        console.log('✅ Knee Flexion:', rel_round + '° at Release,', sign + ext_round + '° extension');
+        document.getElementById('knee-value').textContent = Math.round(release_angle) + '° (Rel)  ' + sign + Math.round(extension) + '°';
       }
-      else {
-        console.warn('⚠️ Incomplete knee angle data available');
-      }
-    } else {
-      console.warn('⚠️ No knee_flexion data found');
     }
 
-    // Head Position / COM 
+    let comDx = null;
     if (results.head_position) {
-      console.log('Head position data:', results.head_position);
       let com_cm = null;
-      
-      // Primary location: head_offset_at_FFC.D_cm (new standardized field name)
       if (results.head_position.head_offset_at_FFC && results.head_position.head_offset_at_FFC.D_cm) {
         com_cm = results.head_position.head_offset_at_FFC.D_cm;
-      }
-      // Fallback: Try old field name ffc_offset.D_cm
-      else if (results.head_position.ffc_offset && results.head_position.ffc_offset.D_cm) {
+        comDx = results.head_position.head_offset_at_FFC.Dx_cm ?? null;
+      } else if (results.head_position.ffc_offset && results.head_position.ffc_offset.D_cm) {
         com_cm = results.head_position.ffc_offset.D_cm;
-        console.log('📊 Using legacy field name: ffc_offset.D_cm');
+        comDx = results.head_position.ffc_offset.Dx_cm ?? null;
       }
-      
       if (com_cm !== null && com_cm !== undefined && !isNaN(com_cm)) {
-        const com_display = parseFloat(com_cm).toFixed(1);
-        document.getElementById('com-value').textContent = com_display + ' cm';
-        console.log('✅ Head Position:', com_display + ' cm');
-      } else {
-        console.warn('⚠️ Invalid head distance values:', results.head_position);
+        document.getElementById('com-value').textContent = parseFloat(com_cm).toFixed(1) + ' cm';
       }
-    } else {
-      console.warn('⚠️ No head_position data found');
     }
 
-    // Wrist Velocity - try multiple field name variations
     if (results.wrist_velocity) {
-      console.log('Wrist velocity data:', results.wrist_velocity);
-      let speed_kmh = null;
-      
-      // Try primary field: wrist_speed_at_release_kmh
-      speed_kmh = results.wrist_velocity.wrist_speed_at_release_kmh;
-      
-      // Fallback 1: ball_speed_proxy.kmh
+      let speed_kmh = results.wrist_velocity.wrist_speed_at_release_kmh;
+
       if (!speed_kmh && results.wrist_velocity.ball_speed_proxy) {
         if (typeof results.wrist_velocity.ball_speed_proxy === 'object' && results.wrist_velocity.ball_speed_proxy.kmh) {
           speed_kmh = results.wrist_velocity.ball_speed_proxy.kmh;
-          console.log('📊 Using ball_speed_proxy.kmh');
         } else if (typeof results.wrist_velocity.ball_speed_proxy === 'number') {
           speed_kmh = results.wrist_velocity.ball_speed_proxy;
-          console.log('📊 Using ball_speed_proxy (number)');
         }
       }
-      
-      // Fallback 2: ball_proxy_kmh
       if (!speed_kmh && results.wrist_velocity.ball_proxy_kmh) {
         speed_kmh = results.wrist_velocity.ball_proxy_kmh;
-        console.log('📊 Using ball_proxy_kmh');
       }
-      
-      // Fallback 3: Calculate from speed_at_release_mps (m/s to km/h = *3.6)
       if (!speed_kmh && results.wrist_velocity.speed_at_release_mps) {
         speed_kmh = parseFloat(results.wrist_velocity.speed_at_release_mps) * 3.6;
-        console.log('📊 Calculated from speed_at_release_mps:', speed_kmh);
       }
-      
-      // Fallback 4: Calculate from wrist_speed_at_release_mps
       if (!speed_kmh && results.wrist_velocity.wrist_speed_at_release_mps) {
         speed_kmh = parseFloat(results.wrist_velocity.wrist_speed_at_release_mps) * 3.6;
-        console.log('📊 Calculated from wrist_speed_at_release_mps:', speed_kmh);
       }
-      
+
       if (speed_kmh !== null && speed_kmh !== undefined && !isNaN(speed_kmh)) {
-        const speed_display = Math.round(parseFloat(speed_kmh));
-        document.getElementById('wrist-value').textContent = speed_display + ' km/h';
-        console.log('✅ Wrist Velocity:', speed_display + ' km/h');
-      } else {
-        console.warn('⚠️ Invalid wrist speed', results.wrist_velocity);
+        document.getElementById('wrist-value').textContent = Math.round(parseFloat(speed_kmh)) + ' km/h';
       }
-    } else {
-      console.warn('⚠️ No wrist_velocity data found');
     }
-    
+
+    renderBowlingViz('resultsViz', { elbow: elbowRelease, knee: kneeRelease, comDx: comDx });
+
     console.log('✅ Results population complete!');
   } catch (error) {
     console.error('❌ Error populating results:', error);
-    console.error('Stack trace:', error.stack);
   }
 }
 
 function downloadFile(fileType) {
   try {
-    if (!window.API) {
-      throw new Error('API client not initialized');
-    }
-    if (!window.API.sessionId) {
-      throw new Error('No session ID available');
-    }
-    
+    if (!window.API || !window.API.sessionId) throw new Error('No session ID available');
     window.API.downloadFile(fileType)
       .then(() => console.log(`✅ Downloaded ${fileType}`))
       .catch(err => {
         console.error(`Failed to download ${fileType}:`, err);
-        alert('Download failed: ' + err.message);
+        showToast('Download failed: ' + err.message);
       });
   } catch (error) {
     console.error('Download error:', error);
-    alert('Download error: ' + error.message);
+    showToast('Download error: ' + error.message);
   }
 }
 
 function downloadAllData() {
-  console.log('📦 Downloading all analysis data...');
-  
   if (!window.API || !window.API.sessionId) {
-    alert('Error: No active session. Please go back to results page.');
+    showToast('No active session. Please go back to results page.');
     return;
   }
-  
+
   const videoFiles = ['stride_video', 'delivery_video', 'elbow_video', 'knee_video', 'head_video'];
   const csvFiles = ['head_csv', 'elbow_csv', 'knee_csv', 'wrist_csv'];
   const allFiles = [...videoFiles, ...csvFiles];
-  
+
   let delay = 0;
-  allFiles.forEach((fileType, index) => {
+  allFiles.forEach((fileType) => {
     setTimeout(() => {
-      console.log(`⬇️  Downloading ${fileType} (${index + 1}/${allFiles.length})...`);
       window.API.downloadFile(fileType)
         .then(() => console.log(`✅ Downloaded ${fileType}`))
-        .catch(err => {
-          console.warn(`⚠️  Could not download ${fileType}:`, err.message);
-          // Don't show alert for each file, log instead
-        });
+        .catch(err => console.warn(`⚠️  Could not download ${fileType}:`, err.message));
     }, delay);
-    delay += 800; // Space out downloads to avoid browser blocking
+    delay += 800;
   });
-  
-  console.log(`✅ Queued ${allFiles.length} files for download. Check browser downloads folder.`);
 }
 
 function downloadReport() {
-  alert('Report download coming soon - will generate PDF with all results');
+  alert('Report download coming soon — will generate PDF with all results');
 }
 </script>
 

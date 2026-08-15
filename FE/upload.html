@@ -3,98 +3,100 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Upload Session — FastBowl Lab</title>
+<title>Upload Session — PitchIQ</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700;800&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="assets/css/theme.css" rel="stylesheet"/>
 <script src="api-client.js"></script>
 <script>
   tailwind.config = {
     darkMode:"class",
     theme:{ extend:{
       colors:{
-        "background":"#0e1417","surface":"#0e1417","surface-container-low":"#161c20",
-        "surface-container":"#1a2024","surface-container-high":"#252b2e",
-        "surface-container-highest":"#303639","surface-bright":"#343a3d",
-        "on-background":"#dee3e7","on-surface":"#dee3e7","on-surface-variant":"#c2c7cc",
-        "primary":"#96ceeb","on-primary":"#003547","primary-container":"#002d3d",
-        "secondary":"#81d9a1","on-secondary":"#00391e","secondary-container":"#006a3d",
-        "tertiary":"#abd600","on-tertiary":"#283500","tertiary-container":"#222d00",
-        "outline":"#8c9196","outline-variant":"#42484c",
-        "error":"#ffb4ab","error-container":"#93000a",
+        background: "#05070a", surface: "#0b0f17", "surface-high": "#10151f", "surface-highest": "#171d2b",
+        border: "#232a3a", primary: "#123a8c", "primary-soft": "#1a4fb4", "on-primary": "#eaf4ff",
+        accent: "#2e8fff", "accent-soft": "#5ec8ff", "on-accent": "#04101f",
+        red: "#e5484d", "red-soft": "#ff6b6f", blue: "#4fd6ff",
+        ink: "#eef3fb", muted: "#8b96a6", faint: "#56607a"
       },
       fontFamily:{ headline:["Space Grotesk"], body:["Manrope"], label:["Lexend"] }
     }}
   }
 </script>
 <style>
-  .material-symbols-outlined { font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; }
-  body { background:#0e1417; color:#dee3e7; font-family:'Manrope',sans-serif; min-height:100dvh; }
-  .drop-zone { border:2px dashed #42484c; transition:border-color .2s,background .2s; }
-  .drop-zone.drag-over { border-color:#abd600; background:rgba(171,214,0,0.05); }
+  .drop-zone { border:2px dashed var(--pitch-border); transition:border-color .2s,background .2s; }
+  .drop-zone.drag-over { border-color:#2e8fff; background:rgba(46,143,255,0.06); }
   .hand-btn { transition:all .2s; }
-  .hand-btn.selected { border-color:#abd600; background:rgba(171,214,0,0.12); }
-  .hand-btn.selected .hand-icon { color:#abd600; }
-  .hand-btn.selected .hand-label { color:#abd600; }
+  .hand-btn.selected { border-color:#2e8fff; background:rgba(46,143,255,0.1); }
+  .hand-btn.selected .hand-icon { color:#2e8fff; }
+  .hand-btn.selected .hand-label { color:#2e8fff; }
   #video-preview { display:none; }
   #preview-section { display:none; }
 </style>
 </head>
 <body class="pb-28">
 
-<!-- Header -->
-<header class="sticky top-0 z-50 bg-[#0e1417]/90 backdrop-blur-md flex justify-between items-center px-6 py-4 border-b border-outline-variant/10">
-  <div class="flex items-center gap-3">
-    <a href="dashboard.html" class="flex items-center gap-3 group">
-      <span class="material-symbols-outlined text-primary text-2xl group-hover:text-tertiary transition-colors">speed</span>
-      <h1 class="font-headline text-xl font-bold text-primary group-hover:text-tertiary transition-colors">FastBowl Lab</h1>
-    </a>
-  </div>
-  <a href="dashboard.html" class="flex items-center gap-2 text-on-surface-variant hover:text-on-surface transition-colors font-label text-sm">
+<header class="pitchiq-header flex justify-between items-center px-6 py-4">
+  <a href="dashboard.html" class="flex items-center gap-3 group">
+    <svg class="pitchiq-logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="13" fill="currentColor" opacity="0.15"/>
+      <circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="2"/>
+      <path d="M8 9c3 3 3 17 0 20M24 9c-3 3-3 17 0 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <h1 class="font-headline text-xl font-bold text-accent-soft group-hover:text-accent transition-colors">PitchIQ</h1>
+  </a>
+  <a href="dashboard.html" class="flex items-center gap-2 text-muted hover:text-ink transition-colors font-label text-sm">
     <span class="material-symbols-outlined text-xl">arrow_back</span>
     Dashboard
   </a>
 </header>
 
-<main class="max-w-2xl mx-auto px-4 py-8">
+<main class="pb-8">
 
-  <!-- Title -->
-  <div class="mb-8">
-    <p class="font-label text-tertiary text-xs tracking-widest uppercase mb-2">New Session</p>
-    <h2 class="font-headline text-4xl font-bold tracking-tight">Upload Bowling Video</h2>
-    <p class="font-body text-on-surface-variant mt-2 text-base leading-relaxed">Upload or record the bowler's delivery. We'll analyse biomechanics across 6 key metrics.</p>
-  </div>
+  <section class="cine-hero hud-grid relative w-full px-4 md:px-12 pt-12 pb-16 md:pt-16 md:pb-20 mb-8" data-parallax-root>
+    <div class="bowling-viz bowling-viz--corner" style="transform: scaleX(-1);">
+      <div id="uploadViz"></div>
+    </div>
+    <div class="cine-content max-w-2xl mx-auto px-0 md:px-4">
+      <p class="section-eyebrow mb-2 fade-in-up">New Session</p>
+      <h2 class="font-headline text-4xl font-bold tracking-tight text-ink fade-in-up d1">Upload Bowling Video</h2>
+      <p class="font-body text-muted mt-2 text-base leading-relaxed fade-in-up d2">Upload or record the bowler's delivery. We'll analyse biomechanics across 6 key metrics.</p>
+    </div>
+  </section>
+
+  <div class="max-w-2xl mx-auto px-4">
 
   <!-- Step 1: Bowler Hand -->
   <section class="mb-8">
     <div class="flex items-center gap-3 mb-4">
-      <div class="w-7 h-7 rounded-full bg-tertiary flex items-center justify-center">
-        <span class="font-label text-on-tertiary text-xs font-bold">1</span>
+      <div class="w-7 h-7 rounded-full bg-accent flex items-center justify-center">
+        <span class="font-label text-on-accent text-xs font-bold">1</span>
       </div>
-      <h3 class="font-headline text-lg font-semibold">Bowling Arm</h3>
+      <h3 class="font-headline text-lg font-semibold text-ink">Bowling Arm</h3>
     </div>
-    <p class="font-body text-on-surface-variant text-sm mb-4">Select whether the bowler is right-arm or left-arm. This determines which joints are analysed.</p>
+    <p class="font-body text-muted text-sm mb-4">Select whether the bowler is right-arm or left-arm. This determines which joints are analysed.</p>
     <div class="grid grid-cols-2 gap-4">
       <button id="btn-right" onclick="selectHand('R')"
-        class="hand-btn selected flex flex-col items-center gap-3 p-6 rounded-2xl border border-outline-variant bg-surface-container-high">
-        <span class="material-symbols-outlined hand-icon text-4xl text-tertiary" style="font-variation-settings:'FILL' 1;">pan_tool</span>
+        class="hand-btn selected flex flex-col items-center gap-3 p-6 rounded-2xl border border-border bg-surface-high">
+        <span class="material-symbols-outlined hand-icon text-4xl text-accent" style="font-variation-settings:'FILL' 1;">pan_tool</span>
         <div class="text-center">
-          <p class="hand-label font-headline text-lg font-bold text-tertiary">Right Arm</p>
-          <p class="font-body text-xs text-on-surface-variant mt-1">Most common</p>
+          <p class="hand-label font-headline text-lg font-bold text-accent">Right Arm</p>
+          <p class="font-body text-xs text-muted mt-1">Most common</p>
         </div>
-        <div id="check-R" class="w-6 h-6 rounded-full bg-tertiary flex items-center justify-center">
-          <span class="material-symbols-outlined text-on-tertiary text-sm">check</span>
+        <div id="check-R" class="w-6 h-6 rounded-full bg-accent flex items-center justify-center">
+          <span class="material-symbols-outlined text-on-accent text-sm">check</span>
         </div>
       </button>
       <button id="btn-left" onclick="selectHand('L')"
-        class="hand-btn flex flex-col items-center gap-3 p-6 rounded-2xl border border-outline-variant bg-surface-container-high">
-        <span class="material-symbols-outlined hand-icon text-4xl text-on-surface-variant" style="font-variation-settings:'FILL' 0; transform:scaleX(-1); display:inline-block">pan_tool</span>
+        class="hand-btn flex flex-col items-center gap-3 p-6 rounded-2xl border border-border bg-surface-high">
+        <span class="material-symbols-outlined hand-icon text-4xl text-muted" style="font-variation-settings:'FILL' 0; transform:scaleX(-1); display:inline-block">pan_tool</span>
         <div class="text-center">
-          <p class="hand-label font-headline text-lg font-bold text-on-surface">Left Arm</p>
-          <p class="font-body text-xs text-on-surface-variant mt-1">Unorthodox</p>
+          <p class="hand-label font-headline text-lg font-bold text-ink">Left Arm</p>
+          <p class="font-body text-xs text-muted mt-1">Unorthodox</p>
         </div>
-        <div id="check-L" class="w-6 h-6 rounded-full bg-surface-container-highest flex items-center justify-center hidden">
-          <span class="material-symbols-outlined text-tertiary text-sm">check</span>
+        <div id="check-L" class="w-6 h-6 rounded-full bg-surface-highest flex items-center justify-center hidden">
+          <span class="material-symbols-outlined text-accent text-sm">check</span>
         </div>
       </button>
     </div>
@@ -104,75 +106,71 @@
   <!-- Step 1.5: Video Name -->
   <section class="mb-8">
     <div class="flex items-center gap-3 mb-4">
-      <div class="w-7 h-7 rounded-full bg-tertiary flex items-center justify-center">
-        <span class="font-label text-on-tertiary text-xs font-bold">1.5</span>
+      <div class="w-7 h-7 rounded-full bg-accent flex items-center justify-center">
+        <span class="font-label text-on-accent text-xs font-bold">2</span>
       </div>
-      <h3 class="font-headline text-lg font-semibold">Video Name</h3>
+      <h3 class="font-headline text-lg font-semibold text-ink">Video Name</h3>
     </div>
-    <p class="font-body text-on-surface-variant text-sm mb-4">Give this video a descriptive name so you can easily find it later.</p>
+    <p class="font-body text-muted text-sm mb-4">Give this video a descriptive name so you can easily find it later.</p>
     <div class="relative">
-      <input type="text" id="video-name-input" placeholder="e.g., Fast Bowler Run-up Analysis" 
-        class="w-full px-4 py-3 rounded-2xl border border-outline-variant bg-surface-container-low text-on-surface placeholder-on-surface-variant focus:outline-none focus:border-tertiary transition-colors font-body text-base"
+      <input type="text" id="video-name-input" placeholder="e.g., Fast Bowler Run-up Analysis"
+        class="w-full px-4 py-3 rounded-2xl border border-border bg-surface text-ink placeholder-faint focus:outline-none focus:border-accent transition-colors font-body text-base"
         onkeyup="updateSubmit()"/>
-      <p class="font-label text-xs text-on-surface-variant mt-2">Optional • If left blank, a default name will be assigned</p>
+      <p class="font-label text-xs text-muted mt-2">Optional • If left blank, a default name will be assigned</p>
     </div>
   </section>
 
   <!-- Step 2: Video Upload / Camera -->
   <section class="mb-8">
     <div class="flex items-center gap-3 mb-4">
-      <div class="w-7 h-7 rounded-full bg-tertiary flex items-center justify-center">
-        <span class="font-label text-on-tertiary text-xs font-bold">3</span>
+      <div class="w-7 h-7 rounded-full bg-accent flex items-center justify-center">
+        <span class="font-label text-on-accent text-xs font-bold">3</span>
       </div>
-      <h3 class="font-headline text-lg font-semibold">Add Video</h3>
+      <h3 class="font-headline text-lg font-semibold text-ink">Add Video</h3>
     </div>
 
-    <!-- Drop zone -->
-    <div id="drop-zone" class="drop-zone rounded-2xl p-8 text-center cursor-pointer relative bg-surface-container-low"
+    <div id="drop-zone" class="drop-zone rounded-2xl p-8 text-center cursor-pointer relative bg-surface"
          onclick="document.getElementById('file-input').click()"
          ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
       <div id="drop-content">
-        <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-          <span class="material-symbols-outlined text-primary text-3xl">upload_file</span>
+        <div class="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center mx-auto mb-4">
+          <span class="material-symbols-outlined text-accent-soft text-3xl">upload_file</span>
         </div>
-        <p class="font-headline text-lg font-semibold mb-1">Drop video here</p>
-        <p class="font-body text-on-surface-variant text-sm">or click to browse</p>
-        <p class="font-label text-xs text-outline mt-3">MP4, MOV, AVI • max 500MB</p>
+        <p class="font-headline text-lg font-semibold mb-1 text-ink">Drop video here</p>
+        <p class="font-body text-muted text-sm">or click to browse</p>
+        <p class="font-label text-xs text-faint mt-3">MP4, MOV, AVI • max 500MB</p>
       </div>
       <input type="file" id="file-input" accept="video/*" class="hidden" onchange="handleFileSelect(event)"/>
     </div>
 
-    <!-- OR divider -->
     <div class="flex items-center gap-3 my-5">
-      <div class="flex-1 h-px bg-outline-variant/30"></div>
-      <span class="font-label text-xs text-on-surface-variant uppercase tracking-wider">or</span>
-      <div class="flex-1 h-px bg-outline-variant/30"></div>
+      <div class="flex-1 seam-divider"></div>
+      <span class="font-label text-xs text-muted uppercase tracking-wider">or</span>
+      <div class="flex-1 seam-divider"></div>
     </div>
 
-    <!-- Camera record button -->
     <button onclick="openCamera()"
-      class="w-full flex items-center justify-center gap-3 py-4 rounded-2xl border border-outline-variant bg-surface-container-high hover:bg-surface-container-highest transition-colors font-label font-semibold text-base">
-      <span class="material-symbols-outlined text-primary text-2xl" style="font-variation-settings:'FILL' 1;">videocam</span>
+      class="btn-secondary w-full flex items-center justify-center gap-3 py-4 text-base">
+      <span class="material-symbols-outlined text-accent-soft text-2xl" style="font-variation-settings:'FILL' 1;">videocam</span>
       Record with Camera
     </button>
 
-    <!-- Camera modal -->
     <div id="camera-modal" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-      <div class="bg-surface-container-high rounded-3xl overflow-hidden w-full max-w-lg">
-        <div class="flex justify-between items-center px-6 py-4 border-b border-outline-variant/20">
-          <h4 class="font-headline font-bold">Record Video</h4>
-          <button onclick="closeCamera()" class="material-symbols-outlined text-on-surface-variant hover:text-on-surface">close</button>
+      <div class="bg-surface-high rounded-3xl overflow-hidden w-full max-w-lg border border-border">
+        <div class="flex justify-between items-center px-6 py-4 border-b border-border">
+          <h4 class="font-headline font-bold text-ink">Record Video</h4>
+          <button onclick="closeCamera()" class="material-symbols-outlined text-muted hover:text-ink">close</button>
         </div>
         <div class="p-4">
           <video id="camera-stream" class="w-full rounded-xl bg-black aspect-video" autoplay muted playsinline></video>
           <div class="flex justify-center gap-4 mt-4">
             <button id="record-btn" onclick="toggleRecord()"
-              class="flex items-center gap-2 px-6 py-3 bg-error text-on-surface font-label font-bold rounded-full">
+              class="flex items-center gap-2 px-6 py-3 bg-red text-ink font-label font-bold rounded-full">
               <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">fiber_manual_record</span>
               Start Recording
             </button>
           </div>
-          <p id="rec-timer" class="text-center font-label text-sm text-on-surface-variant mt-2 hidden">⏺ Recording…</p>
+          <p id="rec-timer" class="text-center font-label text-sm text-muted mt-2 hidden">⏺ Recording…</p>
         </div>
       </div>
     </div>
@@ -181,19 +179,19 @@
   <!-- Preview -->
   <section id="preview-section" class="mb-8">
     <div class="flex items-center gap-3 mb-4">
-      <div class="w-7 h-7 rounded-full bg-secondary flex items-center justify-center">
-        <span class="material-symbols-outlined text-on-secondary text-sm">check</span>
+      <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center">
+        <span class="material-symbols-outlined text-on-primary text-sm">check</span>
       </div>
-      <h3 class="font-headline text-lg font-semibold">Preview</h3>
+      <h3 class="font-headline text-lg font-semibold text-ink">Preview</h3>
     </div>
-    <div class="relative rounded-2xl overflow-hidden bg-surface-container-lowest border border-outline-variant/20">
+    <div class="relative rounded-2xl overflow-hidden bg-black border border-border">
       <video id="video-preview" class="w-full aspect-video object-contain" controls></video>
-      <div class="flex justify-between items-center px-4 py-3 bg-surface-container-low">
+      <div class="flex justify-between items-center px-4 py-3 bg-surface">
         <div>
-          <p id="file-name" class="font-label text-sm font-semibold truncate max-w-[200px]"></p>
-          <p id="file-size" class="font-body text-xs text-on-surface-variant"></p>
+          <p id="file-name" class="font-label text-sm font-semibold text-ink truncate max-w-[200px]"></p>
+          <p id="file-size" class="font-body text-xs text-muted"></p>
         </div>
-        <button onclick="clearVideo()" class="text-error font-label text-sm flex items-center gap-1 hover:opacity-80">
+        <button onclick="clearVideo()" class="text-red-soft font-label text-sm flex items-center gap-1 hover:opacity-80">
           <span class="material-symbols-outlined text-sm">delete</span> Remove
         </button>
       </div>
@@ -201,47 +199,46 @@
   </section>
 
   <!-- Filming tips -->
-  <section class="mb-10 bg-surface-container-low rounded-2xl p-6 border-l-4 border-primary">
-    <div class="flex items-center gap-2 mb-3 text-primary">
+  <section class="mb-10 section-card border-l-4 border-accent">
+    <div class="flex items-center gap-2 mb-3 text-accent-soft">
       <span class="material-symbols-outlined text-lg">lightbulb</span>
       <h4 class="font-label text-sm font-bold uppercase tracking-wide">Filming Tips</h4>
     </div>
-    <ul class="font-body text-sm text-on-surface-variant space-y-2 leading-relaxed">
-      <li class="flex items-start gap-2"><span class="text-tertiary mt-0.5">•</span> Film from a side-on position (perpendicular to the pitch)</li>
-      <li class="flex items-start gap-2"><span class="text-tertiary mt-0.5">•</span> Ensure the full run-up and stumps are visible</li>
-      <li class="flex items-start gap-2"><span class="text-tertiary mt-0.5">•</span> Use 60fps or higher for accurate motion tracking</li>
-      <li class="flex items-start gap-2"><span class="text-tertiary mt-0.5">•</span> Keep the camera stable — avoid handheld shake</li>
+    <ul class="font-body text-sm text-muted space-y-2 leading-relaxed">
+      <li class="flex items-start gap-2"><span class="text-accent mt-0.5">•</span> Film from a side-on position (perpendicular to the pitch)</li>
+      <li class="flex items-start gap-2"><span class="text-accent mt-0.5">•</span> Ensure the full run-up and stumps are visible</li>
+      <li class="flex items-start gap-2"><span class="text-accent mt-0.5">•</span> Use 60fps or higher for accurate motion tracking</li>
+      <li class="flex items-start gap-2"><span class="text-accent mt-0.5">•</span> Keep the camera stable — avoid handheld shake</li>
     </ul>
   </section>
 
   <!-- Submit -->
   <button id="submit-btn" onclick="submitUpload()" disabled
     class="w-full h-16 rounded-2xl font-headline text-lg font-bold transition-all flex items-center justify-center gap-3
-           bg-surface-container-highest text-on-surface-variant cursor-not-allowed"
+           bg-surface-highest text-muted cursor-not-allowed"
     style="box-shadow:none">
     <span class="material-symbols-outlined text-2xl">arrow_forward</span>
     Continue to Calibration Guide
   </button>
-  <p id="submit-error" class="text-error font-body text-sm text-center mt-3 hidden"></p>
+  <p id="submit-error" class="text-red-soft font-body text-sm text-center mt-3 hidden"></p>
+  </div>
 </main>
 
-<!-- Bottom nav (mobile) -->
-<nav class="md:hidden fixed bottom-0 w-full z-50 bg-[#0e1417]/90 backdrop-blur-xl border-t border-outline-variant/10 flex justify-around items-center px-4 py-3">
-  <a href="dashboard.html" class="flex flex-col items-center gap-1 text-on-surface-variant">
-    <span class="material-symbols-outlined">dashboard</span>
-    <span class="font-label text-[10px]">Dashboard</span>
+<nav class="md:hidden pitchiq-bottom-nav safe-pb flex justify-around items-center px-4 py-3">
+  <a href="dashboard.html" class="flex flex-col items-center gap-1 text-muted">
+    <span class="material-symbols-outlined">space_dashboard</span>
+    <span class="font-label text-[10px]">Overview</span>
   </a>
-  <a href="#" class="flex flex-col items-center gap-1 text-tertiary">
+  <a href="upload.html" class="flex flex-col items-center gap-1 text-accent-soft">
     <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1;">add_circle</span>
-    <span class="font-label text-[10px] font-bold">Upload</span>
-  </a>
-  <a href="#" class="flex flex-col items-center gap-1 text-on-surface-variant">
-    <span class="material-symbols-outlined">settings</span>
-    <span class="font-label text-[10px]">Settings</span>
+    <span class="font-label text-[10px] font-bold">Analyse</span>
   </a>
 </nav>
 
+<script src="assets/js/shared.js"></script>
 <script>
+renderBowlingViz('uploadViz', { showBall: false });
+
 // ── state ──────────────────────────────────────────────────────────────────
 let selectedFile   = null;
 let mediaRecorder  = null;
@@ -249,9 +246,7 @@ let recordedChunks = [];
 let cameraStream   = null;
 let isRecording    = false;
 
-// Initialize session on page load
 document.addEventListener('DOMContentLoaded', async () => {
-  // Always create a fresh session on the upload page
   try {
     await API.createSession();
   } catch (error) {
@@ -260,7 +255,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// ── hand selection ─────────────────────────────────────────────────────────
 function selectHand(hand) {
   document.getElementById('selected-hand').value = hand;
   const btnR = document.getElementById('btn-right');
@@ -282,7 +276,6 @@ function selectHand(hand) {
   updateSubmit();
 }
 
-// ── drag & drop ────────────────────────────────────────────────────────────
 function handleDragOver(e) {
   e.preventDefault();
   document.getElementById('drop-zone').classList.add('drag-over');
@@ -310,7 +303,6 @@ function setFile(file) {
   document.getElementById('preview-section').style.display = 'block';
   document.getElementById('file-name').textContent = file.name;
   document.getElementById('file-size').textContent = formatBytes(file.size);
-  // hide drop zone
   document.getElementById('drop-zone').style.display = 'none';
   updateSubmit();
 }
@@ -330,7 +322,6 @@ function formatBytes(b) {
   return (b/1024/1024).toFixed(1)+' MB';
 }
 
-// ── camera ─────────────────────────────────────────────────────────────────
 async function openCamera() {
   try {
     cameraStream = await navigator.mediaDevices.getUserMedia({video:true, audio:false});
@@ -365,7 +356,7 @@ function startRecording() {
   isRecording = true;
   const btn = document.getElementById('record-btn');
   btn.innerHTML = '<span class="material-symbols-outlined" style="font-variation-settings:\'FILL\' 1;">stop_circle</span> Stop Recording';
-  btn.className = btn.className.replace('bg-error','bg-surface-bright');
+  btn.className = btn.className.replace('bg-red','bg-surface-highest');
   document.getElementById('rec-timer').classList.remove('hidden');
 }
 
@@ -375,20 +366,19 @@ function stopRecording() {
   document.getElementById('rec-timer').classList.add('hidden');
 }
 
-// ── submit ─────────────────────────────────────────────────────────────────
 function updateSubmit() {
   const btn  = document.getElementById('submit-btn');
   const ready = !!selectedFile;
   if (ready) {
     btn.disabled = false;
     btn.className = btn.className
-      .replace('bg-surface-container-highest text-on-surface-variant cursor-not-allowed','')
-      + ' bg-tertiary text-on-tertiary cursor-pointer shadow-[0_8px_24px_rgba(171,214,0,0.3)]';
+      .replace('bg-surface-highest text-muted cursor-not-allowed','')
+      + ' bg-accent text-on-accent cursor-pointer shadow-[0_8px_24px_rgba(46,143,255,0.35)]';
   } else {
     btn.disabled = true;
-    if (!btn.className.includes('bg-surface-container-highest')) {
-      btn.className = btn.className.replace('bg-tertiary text-on-tertiary cursor-pointer shadow-[0_8px_24px_rgba(171,214,0,0.3)]','')
-        + ' bg-surface-container-highest text-on-surface-variant cursor-not-allowed';
+    if (!btn.className.includes('bg-surface-highest')) {
+      btn.className = btn.className.replace('bg-accent text-on-accent cursor-pointer shadow-[0_8px_24px_rgba(46,143,255,0.35)]','')
+        + ' bg-surface-highest text-muted cursor-not-allowed';
     }
   }
 }
@@ -405,18 +395,14 @@ async function submitUpload() {
   errEl.classList.add('hidden');
 
   try {
-    // Upload video with name
     await API.uploadVideo(selectedFile, videoName, (percent) => {
       btn.innerHTML = `<span class="material-symbols-outlined animate-spin">sync</span> Uploading… ${Math.round(percent)}%`;
     });
 
-    // Set bowling arm
     await API.setBowlingArm(hand);
 
-    // Store session for next page
     sessionStorage.setItem('sessionId', API.sessionId);
-    
-    // Redirect to calibration guide
+
     window.location.href = `calibration-video.html?session=${API.sessionId}`;
   } catch(e) {
     errEl.textContent = 'Upload failed: ' + e.message;

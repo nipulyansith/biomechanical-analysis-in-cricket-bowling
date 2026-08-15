@@ -3,132 +3,125 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Processing - FastBowl Lab</title>
+<title>Processing — PitchIQ</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700;800&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="assets/css/theme.css" rel="stylesheet"/>
 <script src="api-client.js"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: { extend: {
+      colors: {
+        background: "#05070a", surface: "#0b0f17", "surface-high": "#10151f", "surface-highest": "#171d2b",
+        border: "#232a3a", primary: "#123a8c", "primary-soft": "#1a4fb4", "on-primary": "#eaf4ff",
+        accent: "#2e8fff", "accent-soft": "#5ec8ff", "on-accent": "#04101f",
+        red: "#e5484d", "red-soft": "#ff6b6f", blue: "#4fd6ff",
+        ink: "#eef3fb", muted: "#8b96a6", faint: "#56607a"
+      },
+      fontFamily: { headline: ["Space Grotesk"], body: ["Manrope"], label: ["Lexend"] }
+    }}
+  }
+</script>
 <style>
-  :root { --color-primary: #96ceeb; --color-tertiary: #abd600; }
-  .progress-ring {
-    transform: rotate(-90deg);
-    transform-origin: 50% 50%;
-  }
-  .progress-ring-circle {
-    transition: stroke-dashoffset 0.35s;
-    stroke-dasharray: 377;
-    stroke-dashoffset: 0;
-  }
+  .progress-ring { transform: rotate(-90deg); transform-origin: 50% 50%; }
+  .progress-ring-circle { transition: stroke-dashoffset 0.35s; stroke-dasharray: 377; stroke-dashoffset: 0; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
   .animate-pulse-custom { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 </style>
 </head>
-<body class="bg-[#0e1417] text-[#dee3e7] min-h-screen flex flex-col">
+<body class="bg-background text-ink min-h-screen flex flex-col">
 
-<header class="sticky top-0 z-50 bg-[#0e1417]/90 backdrop-blur-md flex justify-between items-center px-6 py-4 border-b border-[#42484c]/10">
+<header class="pitchiq-header flex justify-between items-center px-6 py-4">
   <div class="flex items-center gap-3">
-    <span class="material-symbols-outlined text-primary text-2xl">speed</span>
-    <h1 class="font-['Space_Grotesk'] text-xl font-bold text-primary">FastBowl Lab</h1>
+    <svg class="pitchiq-logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="13" fill="currentColor" opacity="0.15"/>
+      <circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="2"/>
+      <path d="M8 9c3 3 3 17 0 20M24 9c-3 3-3 17 0 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <h1 class="font-headline text-xl font-bold text-accent-soft">PitchIQ</h1>
   </div>
 </header>
 
-<main class="flex-1 flex items-center justify-center px-4 py-12">
-  <div class="w-full max-w-md space-y-8">
-    
-    <!-- Status Title -->
+<main class="cine-hero hud-grid flex-1 flex items-center justify-center px-4 py-12 relative overflow-hidden" data-parallax-root>
+  <div class="bowling-viz bowling-viz--large absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] opacity-[0.18] pointer-events-none">
+    <div id="processingViz"></div>
+  </div>
+  <div class="cine-content w-full max-w-md space-y-8">
+
     <div class="text-center space-y-2">
-      <h2 class="font-['Space_Grotesk'] text-4xl font-bold">Analysing Bowling Technique</h2>
-      <p class="font-['Manrope'] text-[#c2c7cc]">Processing video through AI models</p>
+      <p class="section-eyebrow">Cricket Bowling Biomechanical Analysis</p>
+      <h2 class="font-headline text-3xl font-bold text-ink">Analysing Bowling Technique</h2>
+      <p class="font-body text-muted">Running pose extraction and biomechanics pipeline</p>
     </div>
 
-    <!-- Progress Circle -->
     <div class="flex justify-center">
       <div class="relative w-48 h-48">
-        <svg class="progress-ring w-48 h-48" style="filter: drop-shadow(0 0 20px rgba(150, 206, 235, 0.3));">
-          <!-- Background circle -->
-          <circle cx="96" cy="96" r="60" stroke="#303639" stroke-width="8" fill="none"/>
-          <!-- Progress circle -->
+        <svg class="progress-ring w-48 h-48" style="filter: drop-shadow(0 0 20px rgba(46, 143, 255, 0.3));">
+          <circle cx="96" cy="96" r="60" stroke="#171d2b" stroke-width="8" fill="none"/>
           <circle class="progress-ring-circle" cx="96" cy="96" r="60" stroke="url(#grad)" stroke-width="8" fill="none" stroke-linecap="round"/>
           <defs>
             <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color:#96ceeb;stop-opacity:1" />
-              <stop offset="100%" style="stop-color:#abd600;stop-opacity:1" />
+              <stop offset="0%" style="stop-color:#123a8c;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#2e8fff;stop-opacity:1" />
             </linearGradient>
           </defs>
         </svg>
-        <!-- Center text -->
         <div class="absolute inset-0 flex flex-col items-center justify-center">
-          <div class="text-5xl font-bold text-primary" id="progress-percent">0%</div>
-          <div class="text-sm text-[#c2c7cc] mt-2" id="progress-status">Starting...</div>
+          <div class="text-5xl font-bold text-accent-soft font-headline" id="progress-percent">0%</div>
+          <div class="text-sm text-muted mt-2" id="progress-status">Starting...</div>
         </div>
       </div>
     </div>
 
-    <!-- Status Messages -->
     <div class="space-y-3">
-      <div class="flex items-center gap-3 p-4 rounded-xl bg-[#1a2024] border border-[#42484c]/30">
-        <div class="flex-shrink-0">
-          <span class="material-symbols-outlined text-secondary animate-pulse-custom" style="font-variation-settings: 'FILL' 1;">check_circle</span>
-        </div>
-        <span class="font-['Manrope'] text-sm">Video uploaded and validated</span>
+      <div class="flex items-center gap-3 p-4 rounded-xl bg-surface border border-border">
+        <span class="material-symbols-outlined text-primary-soft animate-pulse-custom" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+        <span class="font-body text-sm">Video uploaded and validated</span>
       </div>
-
-      <div class="flex items-center gap-3 p-4 rounded-xl bg-[#1a2024] border border-[#42484c]/30">
-        <div class="flex-shrink-0">
-          <span class="material-symbols-outlined text-secondary animate-pulse-custom" style="font-variation-settings: 'FILL' 1;">check_circle</span>
-        </div>
-        <span class="font-['Manrope'] text-sm">Calibration points verified</span>
+      <div class="flex items-center gap-3 p-4 rounded-xl bg-surface border border-border">
+        <span class="material-symbols-outlined text-primary-soft animate-pulse-custom" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+        <span class="font-body text-sm">Calibration points verified</span>
       </div>
-
-      <div id="processing-status" class="flex items-center gap-3 p-4 rounded-xl bg-[#1a2024] border border-primary/30">
-        <div class="flex-shrink-0">
-          <span class="material-symbols-outlined text-primary animate-spin">sync</span>
-        </div>
-        <span class="font-['Manrope'] text-sm">Extracting keypoints from video...</span>
+      <div id="processing-status" class="flex items-center gap-3 p-4 rounded-xl bg-surface border border-accent/30">
+        <span class="material-symbols-outlined text-accent-soft animate-spin">sync</span>
+        <span class="font-body text-sm">Detecting pose landmarks…</span>
       </div>
-
-      <div id="analysis-status" class="flex items-center gap-3 p-4 rounded-xl bg-[#1a2024] border border-[#42484c]/30 opacity-50">
-        <div class="flex-shrink-0">
-          <span class="material-symbols-outlined text-on-surface-variant">schedule</span>
-        </div>
-        <span class="font-['Manrope'] text-sm text-[#c2c7cc]">Running analyses...</span>
+      <div id="analysis-status" class="flex items-center gap-3 p-4 rounded-xl bg-surface border border-border opacity-50">
+        <span class="material-symbols-outlined text-muted">schedule</span>
+        <span class="font-body text-sm text-muted">Computing joint kinematics…</span>
       </div>
-
-      <div id="export-status" class="flex items-center gap-3 p-4 rounded-xl bg-[#1a2024] border border-[#42484c]/30 opacity-50">
-        <div class="flex-shrink-0">
-          <span class="material-symbols-outlined text-on-surface-variant">save</span>
-        </div>
-        <span class="font-['Manrope'] text-sm text-[#c2c7cc]">Generating results and visualizations...</span>
+      <div id="export-status" class="flex items-center gap-3 p-4 rounded-xl bg-surface border border-border opacity-50">
+        <span class="material-symbols-outlined text-muted">save</span>
+        <span class="font-body text-sm text-muted">Generating charts and annotated video…</span>
       </div>
     </div>
 
-    <!-- Estimated Time -->
     <div class="text-center">
-      <p class="font-['Manrope'] text-sm text-[#c2c7cc]">
-        <span id="time-remaining">Est. 3-5 minutes remaining</span><br>
-        <span class="text-xs text-[#8c9196]">This depends on video length and quality</span>
+      <p class="font-body text-sm text-muted">
+        <span id="time-remaining">Est. 3–5 minutes remaining</span><br>
+        <span class="text-xs text-faint">This depends on video length and quality</span>
       </p>
     </div>
 
-    <!-- Tips Section -->
-    <div class="bg-[#222d00]/30 border border-[#abd600]/30 rounded-xl p-4 space-y-2">
-      <div class="flex items-center gap-2 text-tertiary">
+    <div class="section-card border-l-4 border-accent space-y-2">
+      <div class="flex items-center gap-2 text-accent-soft">
         <span class="material-symbols-outlined text-lg">lightbulb</span>
-        <h4 class="font-['Lexend'] text-sm font-bold uppercase tracking-wide">Did you know?</h4>
+        <h4 class="font-label text-sm font-bold uppercase tracking-wide">Did you know?</h4>
       </div>
-      <p class="font-['Manrope'] text-sm text-[#c2c7cc]" id="tip-text">
-        Our AI model analyzes keypoints frame-by-frame to extract precise biomechanical metrics.
+      <p class="font-body text-sm text-muted" id="tip-text">
+        Pose extraction tracks 17 body keypoints per frame to reconstruct the bowling action.
       </p>
     </div>
 
-    <!-- Error Section (hidden by default) -->
-    <div id="error-section" class="hidden bg-[#93000a]/20 border border-[#ffb4ab]/30 rounded-xl p-4 space-y-2">
-      <div class="flex items-center gap-2 text-[#ffb4ab]">
+    <div id="error-section" class="hidden section-card border-l-4 border-red space-y-2">
+      <div class="flex items-center gap-2 text-red-soft">
         <span class="material-symbols-outlined text-lg">error</span>
-        <h4 class="font-['Lexend'] text-sm font-bold uppercase tracking-wide">Processing Error</h4>
+        <h4 class="font-label text-sm font-bold uppercase tracking-wide">Processing Error</h4>
       </div>
-      <p class="font-['Manrope'] text-sm text-[#ffb4ab]" id="error-text"></p>
-      <button onclick="location.href='/upload.html'" class="w-full mt-3 px-4 py-2 bg-[#ffb4ab]/10 border border-[#ffb4ab]/30 rounded-lg text-[#ffb4ab] font-['Manrope'] text-sm hover:bg-[#ffb4ab]/20">
+      <p class="font-body text-sm text-red-soft" id="error-text"></p>
+      <button onclick="location.href='/upload.html'" class="btn-secondary w-full mt-3 px-4 py-2 text-sm">
         Try Another Video
       </button>
     </div>
@@ -137,11 +130,11 @@
 
 <script>
 const tips = [
-  "Our AI model analyzes keypoints frame-by-frame to extract precise biomechanical metrics.",
-  "Pose detection uses YOLO v8 for real-time human keypoint detection.",
-  "Each analysis generates annotated videos showing the specific metrics being tracked.",
-  "The calibration step ensures measurements are in real-world meters, not just pixels.",
-  "Fast bowling speeds can exceed 150 km/h - our analysis captures this precisely."
+  "Pose extraction tracks 17 body keypoints per frame to reconstruct the bowling action.",
+  "Pose detection uses YOLOv8 for real-time human keypoint detection.",
+  "Each analysis generates an annotated video for every biomechanical metric.",
+  "The calibration step converts pixel distances into real-world metres before any measurement is calculated.",
+  "Fast bowling release speeds can exceed 150 km/h — the wrist velocity module is built to capture that precisely."
 ];
 
 let currentTip = 0;
@@ -153,7 +146,6 @@ async function startPolling() {
       const response = await API.getProgress();
       const progress = response;
 
-      // Update progress
       if (!progress || !progress.success) {
         console.error('Invalid progress response:', response);
         return;
@@ -161,24 +153,20 @@ async function startPolling() {
       document.getElementById('progress-percent').textContent = progress.progress + '%';
       updateProgressCircle(progress.progress);
 
-      // Update status
       updateStatus(progress.status, progress.progress);
 
-      // Rotate tips every 10 seconds
       if (Math.floor(Date.now() / 10000) % tips.length !== currentTip) {
         currentTip = Math.floor(Date.now() / 10000) % tips.length;
         document.getElementById('tip-text').textContent = tips[currentTip];
       }
 
-      // Check if complete
       if (progress.status === 'completed') {
         clearInterval(progressInterval);
         document.getElementById('progress-percent').textContent = '100%';
         document.getElementById('progress-status').textContent = 'Complete!';
         updateProgressCircle(100);
-        
+
         console.log('✅ Processing completed, redirecting to results...');
-        // Redirect to results
         setTimeout(() => {
           window.location.href = `/results.html?session=${API.sessionId}`;
         }, 2000);
@@ -189,7 +177,6 @@ async function startPolling() {
       }
     } catch (error) {
       console.error('Progress check failed:', error);
-      // Continue polling even if there's an error
     }
   }, 1000);
 }
@@ -212,37 +199,35 @@ function updateStatus(status, progress) {
     'completed': 'Analysis complete!'
   };
 
-  // Enhanced progress messages based on progress percentage
   let progressMsg = msgs[status] || status;
   if (status === 'processing') {
-    if (progress < 30) progressMsg = 'Loading AI model...';
-    else if (progress < 50) progressMsg = 'Extracting keypoints...';
-    else if (progress < 60) progressMsg = 'Detecting bowling events...';
-    else if (progress < 85) progressMsg = 'Running biomechanics analysis...';
-    else if (progress < 100) progressMsg = 'Finalizing results...';
+    if (progress < 30) progressMsg = 'Loading pose model…';
+    else if (progress < 50) progressMsg = 'Detecting pose landmarks…';
+    else if (progress < 60) progressMsg = 'Detecting bowling events…';
+    else if (progress < 85) progressMsg = 'Computing joint kinematics…';
+    else if (progress < 100) progressMsg = 'Finalizing results…';
   }
 
   document.getElementById('progress-status').textContent = progressMsg;
 
-  // Update status indicators
   if (progress >= 20) {
     document.getElementById('analysis-status').classList.remove('opacity-50');
     document.getElementById('processing-status').querySelector('span:first-child').classList.remove('animate-spin');
     document.getElementById('processing-status').querySelector('span:first-child').textContent = 'check_circle';
-    document.getElementById('processing-status').querySelector('span:first-child').classList.add('text-secondary');
+    document.getElementById('processing-status').querySelector('span:first-child').classList.add('text-primary-soft');
   }
 
   if (progress >= 90) {
     document.getElementById('analysis-status').classList.remove('opacity-50');
     document.getElementById('analysis-status').querySelector('span:first-child').classList.remove('animate-spin');
     document.getElementById('analysis-status').querySelector('span:first-child').textContent = 'check_circle';
-    document.getElementById('analysis-status').querySelector('span:first-child').classList.add('text-secondary');
-    
+    document.getElementById('analysis-status').querySelector('span:first-child').classList.add('text-primary-soft');
+
     document.getElementById('export-status').classList.remove('opacity-50');
     document.getElementById('export-status').querySelector('span:first-child').classList.add('animate-spin');
     document.getElementById('export-status').querySelector('span:first-child').textContent = 'sync';
-    document.getElementById('export-status').querySelector('span:first-child').classList.remove('text-on-surface-variant');
-    document.getElementById('export-status').querySelector('span:first-child').classList.add('text-primary');
+    document.getElementById('export-status').querySelector('span:first-child').classList.remove('text-muted');
+    document.getElementById('export-status').querySelector('span:first-child').classList.add('text-accent-soft');
   }
 }
 
@@ -254,8 +239,11 @@ function showError(error) {
   document.getElementById('export-status').classList.add('hidden');
 }
 
-// Start polling on page load
 document.addEventListener('DOMContentLoaded', startPolling);
+</script>
+<script src="assets/js/shared.js"></script>
+<script>
+renderBowlingViz('processingViz', { showBall: false });
 </script>
 
 </body>

@@ -3,106 +3,102 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Center of Mass - FastBowl Lab</title>
+<title>Centre of Mass — PitchIQ</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700;800&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="assets/css/theme.css" rel="stylesheet"/>
 <script src="api-client.js"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: { extend: {
+      colors: {
+        background: "#05070a", surface: "#0b0f17", "surface-high": "#10151f", "surface-highest": "#171d2b",
+        border: "#232a3a", primary: "#123a8c", "primary-soft": "#1a4fb4", "on-primary": "#eaf4ff",
+        accent: "#2e8fff", "accent-soft": "#5ec8ff", "on-accent": "#04101f",
+        red: "#e5484d", "red-soft": "#ff6b6f", blue: "#4fd6ff",
+        ink: "#eef3fb", muted: "#8b96a6", faint: "#56607a"
+      },
+      fontFamily: { headline: ["Space Grotesk"], body: ["Manrope"], label: ["Lexend"] }
+    }}
+  }
+</script>
 </head>
-<body class="bg-[#0e1417] text-[#dee3e7] min-h-screen">
+<body class="bg-background text-ink min-h-screen">
 
-<header class="sticky top-0 z-50 bg-[#0e1417]/90 backdrop-blur-md flex justify-between items-center px-6 py-4 border-b border-[#42484c]/10">
-  <div class="flex items-center gap-3">
-    <a href="#" onclick="goBackToResults(event)" class="flex items-center gap-2 hover:opacity-80 transition">
-      <span class="material-symbols-outlined text-primary">arrow_back</span>
-      <h1 class="font-['Space_Grotesk'] text-lg font-bold text-primary">Center of Mass</h1>
-    </a>
-  </div>
-  <button onclick="downloadData()" class="flex items-center gap-2 px-4 py-2 bg-[#96ceeb]/10 border border-[#96ceeb]/30 rounded-lg text-[#96ceeb] font-['Manrope'] text-sm hover:bg-[#96ceeb]/20">
-    <span class="material-symbols-outlined">download</span>
-    Video
+<header class="pitchiq-header flex justify-between items-center px-6 py-4">
+  <a href="#" onclick="goBackToResults(event)" class="flex items-center gap-2 hover:opacity-80 transition">
+    <span class="material-symbols-outlined text-accent-soft">arrow_back</span>
+    <h1 class="font-headline text-lg font-bold text-accent-soft">Centre of Mass</h1>
+  </a>
+  <button onclick="downloadData()" class="btn-secondary flex items-center gap-2 px-4 py-2 text-sm">
+    <span class="material-symbols-outlined text-lg">download</span> Video
   </button>
 </header>
 
 <main class="max-w-6xl mx-auto px-4 py-12">
-  
-  <div class="mb-12">
-    <h2 class="font-['Space_Grotesk'] text-3xl font-bold mb-2">Head Position & Center of Mass</h2>
-    <p class="font-['Manrope'] text-[#c2c7cc]">Tracking head position and body alignment during delivery</p>
+
+  <div class="mb-10">
+    <p class="section-eyebrow mb-2">Body Dynamics</p>
+    <h2 class="font-headline text-3xl font-bold mb-2 text-ink">Centre of Mass — Head Position Proxy</h2>
+    <p class="font-body text-muted">Head centroid offset relative to the front foot, tracking balance and stabilization during delivery</p>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-    
-    <div class="bg-[#1a2024] border border-primary/30 rounded-2xl p-6">
-      <h3 class="font-['Space_Grotesk'] text-lg font-bold text-primary mb-4">Head Distance (FFC)</h3>
-      <div id="head-distance" class="text-3xl font-bold text-primary mb-2">-- cm</div>
-      <p class="font-['Manrope'] text-[#8c9196] text-sm">At front foot contact</p>
+  <div class="rail mb-8 reveal">
+    <div class="rail__item">
+      <span class="rail__label"><span class="material-symbols-outlined">hub</span>Head Distance (FFC)</span>
+      <div id="head-distance" class="rail__value tnum">-- cm</div>
     </div>
-
-    <div class="bg-[#1a2024] border border-secondary/30 rounded-2xl p-6">
-      <h3 class="font-['Space_Grotesk'] text-lg font-bold text-secondary mb-4">Horizontal Offset</h3>
-      <div id="head-dx" class="text-3xl font-bold text-secondary mb-2">-- cm</div>
-      <p class="font-['Manrope'] text-[#8c9196] text-sm">Forward displacement</p>
+    <div class="rail__item">
+      <span class="rail__label"><span class="material-symbols-outlined">arrow_range</span>Horizontal Offset</span>
+      <div id="head-dx" class="rail__value tnum">-- cm</div>
     </div>
-
-    <div class="bg-[#1a2024] border border-tertiary/30 rounded-2xl p-6">
-      <h3 class="font-['Space_Grotesk'] text-lg font-bold text-tertiary mb-4">Vertical Offset</h3>
-      <div id="head-dy" class="text-3xl font-bold text-tertiary mb-2">-- cm</div>
-      <p class="font-['Manrope'] text-[#8c9196] text-sm">Vertical displacement</p>
+    <div class="rail__item">
+      <span class="rail__label"><span class="material-symbols-outlined">height</span>Vertical Offset</span>
+      <div id="head-dy" class="rail__value tnum">-- cm</div>
     </div>
-
   </div>
 
-  <section class="bg-[#1a2024]/50 border border-[#42484c]/30 rounded-2xl p-8 mb-8">
-    <h3 class="font-['Space_Grotesk'] text-2xl font-bold mb-6">Annotated Video</h3>
-    <div class="bg-black rounded-lg overflow-hidden">
-      <video id="analysisVideo" controls class="w-full">
+  <section class="analytics-card mb-8 reveal">
+    <div class="video-card__phase-bar">Body Position — Head vs. Front Foot</div>
+    <div class="analytics-card__frame hud-frame">
+      <video id="analysisVideo" controls>
         Your browser does not support the video tag.
       </video>
     </div>
   </section>
 
   <div class="flex gap-4 justify-center">
-    <a href="#" onclick="goBackToResults(event)" class="px-8 py-3 bg-[#252b2e] border border-[#42484c]/30 rounded-lg text-[#dee3e7] font-['Manrope'] font-semibold hover:bg-[#303639]">
-      Back to Results
-    </a>
+    <a href="#" onclick="goBackToResults(event)" class="btn-secondary px-8 py-3">Back to Results</a>
   </div>
 
 </main>
 
+<script src="assets/js/shared.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     await new Promise(resolve => setTimeout(resolve, 100));
     if (!window.API) throw new Error('API client not initialized');
     if (!window.API.sessionId) throw new Error('No session ID available');
-    console.log('📊 Loading head position data...');
     const response = await window.API.getResults();
     if (response.success && response.results) {
       displayHeadAnalysis(response.results);
     } else {
-      showError('Could not load analysis results');
+      showToast('Could not load analysis results');
     }
   } catch (error) {
     console.error('Error:', error);
-    showError('Error: ' + error.message);
+    showToast('Error: ' + error.message);
   }
 });
 
-function showError(message) {
-  const errorDiv = document.createElement('div');
-  errorDiv.className = 'fixed top-4 right-4 bg-red-600 text-white px-6 py-3 rounded-lg';
-  errorDiv.textContent = message;
-  document.body.appendChild(errorDiv);
-  setTimeout(() => errorDiv.remove(), 5000);
-}
-
 function displayHeadAnalysis(results) {
   if (!results.head_position) return;
-  
+
   const data = results.head_position;
-  console.log('📊 Head Position Data:', data);
-  
+
   if (data.head_offset_at_FFC) {
     const ffc = data.head_offset_at_FFC;
     if (ffc.D_cm !== undefined) {
@@ -115,15 +111,12 @@ function displayHeadAnalysis(results) {
       document.getElementById('head-dy').textContent = parseFloat(ffc.Dy_cm).toFixed(1) + ' cm';
     }
   }
-  
+
   loadVideo('head_position');
 }
 
 function loadVideo(videoType) {
-  if (!window.API || !window.API.sessionId) {
-    console.error('❌ Cannot load video: No session ID');
-    return;
-  }
+  if (!window.API || !window.API.sessionId) return;
   document.getElementById('analysisVideo').src = `/api/results/${window.API.sessionId}/video/${videoType}_annotated.mp4`;
 }
 
@@ -132,7 +125,7 @@ async function downloadData() {
     if (!window.API || !window.API.sessionId) throw new Error('No active session');
     await window.API.downloadFile('head_video');
   } catch (error) {
-    alert('Download failed: ' + error.message);
+    showToast('Download failed: ' + error.message);
   }
 }
 </script>

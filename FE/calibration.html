@@ -1,242 +1,138 @@
 <!DOCTYPE html>
-
-<html class="dark" lang="en"><head>
+<html class="dark" lang="en">
+<head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Calibration - FastBowl Lab</title>
+<title>Calibration — PitchIQ</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script src="api-client.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Manrope:wght@300;400;500;600;700;800&amp;family=Lexend:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700;800&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="assets/css/theme.css" rel="stylesheet"/>
 <script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    "colors": {
-                        "surface-container-lowest": "#090f12",
-                        "surface": "#0e1417",
-                        "background": "#0e1417",
-                        "secondary": "#81d9a1",
-                        "on-surface-variant": "#c2c7cc",
-                        "on-tertiary-fixed-variant": "#3c4d00",
-                        "on-primary": "#003547",
-                        "tertiary": "#abd600",
-                        "surface-variant": "#303639",
-                        "surface-container-high": "#252b2e",
-                        "primary-container": "#002d3d",
-                        "on-tertiary-container": "#7c9c00",
-                        "on-error": "#690005",
-                        "surface-container": "#1a2024",
-                        "primary": "#96ceeb",
-                        "on-primary-container": "#6098b2",
-                        "on-tertiary-fixed": "#161e00",
-                        "on-secondary": "#00391e",
-                        "inverse-primary": "#2a657e",
-                        "tertiary-fixed": "#c3f400",
-                        "tertiary-container": "#222d00",
-                        "surface-container-highest": "#303639",
-                        "inverse-surface": "#dee3e7",
-                        "inverse-on-surface": "#2b3135",
-                        "error-container": "#93000a",
-                        "error": "#ffb4ab",
-                        "on-secondary-fixed-variant": "#00522e",
-                        "surface-container-low": "#161c20",
-                        "secondary-container": "#006a3d",
-                        "on-background": "#dee3e7",
-                        "outline-variant": "#42484c",
-                        "on-primary-fixed": "#001f2b",
-                        "surface-tint": "#96ceeb",
-                        "outline": "#8c9196",
-                        "on-secondary-container": "#8fe7af",
-                        "on-primary-fixed-variant": "#044d65",
-                        "secondary-fixed": "#9df5bc",
-                        "on-secondary-fixed": "#002110",
-                        "primary-fixed-dim": "#96ceeb",
-                        "secondary-fixed-dim": "#81d9a1",
-                        "primary-fixed": "#bfe8ff",
-                        "on-tertiary": "#283500",
-                        "surface-dim": "#0e1417",
-                        "tertiary-fixed-dim": "#abd600",
-                        "on-surface": "#dee3e7",
-                        "surface-bright": "#343a3d",
-                        "on-error-container": "#ffdad6"
-                    },
-                    "borderRadius": {
-                        "DEFAULT": "0.125rem",
-                        "lg": "0.25rem",
-                        "xl": "0.5rem",
-                        "full": "0.75rem"
-                    },
-                    "fontFamily": {
-                        "headline": ["Space Grotesk"],
-                        "body": ["Manrope"],
-                        "label": ["Lexend"]
-                    }
-                },
-            },
-        }
-    </script>
+  tailwind.config = {
+    darkMode: "class",
+    theme: { extend: {
+      colors: {
+        background: "#05070a", surface: "#0b0f17", "surface-high": "#10151f", "surface-highest": "#171d2b",
+        border: "#232a3a", primary: "#123a8c", "primary-soft": "#1a4fb4", "on-primary": "#eaf4ff",
+        accent: "#2e8fff", "accent-soft": "#5ec8ff", "on-accent": "#04101f",
+        red: "#e5484d", "red-soft": "#ff6b6f", blue: "#4fd6ff",
+        ink: "#eef3fb", muted: "#8b96a6", faint: "#56607a"
+      },
+      fontFamily: { headline: ["Space Grotesk"], body: ["Manrope"], label: ["Lexend"] }
+    }}
+  }
+</script>
 <style>
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        }
-        
-        @keyframes fadeInDown {
-            0% { opacity: 0; transform: translateY(-20px); }
-            100% { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes fadeOutUp {
-            0% { opacity: 1; transform: translateY(0); }
-            100% { opacity: 0; transform: translateY(-20px); }
-        }
-        
-        .animate-in { animation: fadeInDown 0.3s ease-out; }
-        .animate-out { animation: fadeOutUp 0.3s ease-in; }
-        
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .calibration-overlay {
-            background: linear-gradient(0deg, rgba(14,20,23,0.9) 0%, rgba(14,20,23,0) 40%, rgba(14,20,23,0) 60%, rgba(14,20,23,0.9) 100%);
-        }
-    </style>
+  @keyframes fadeInDown { 0% { opacity: 0; transform: translateY(-20px); } 100% { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeOutUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-20px); } }
+  .animate-in { animation: fadeInDown 0.3s ease-out; }
+  .animate-out { animation: fadeOutUp 0.3s ease-in; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .calibration-overlay {
+    background: linear-gradient(0deg, rgba(11,20,18,0.75) 0%, rgba(11,20,18,0) 30%, rgba(11,20,18,0) 70%, rgba(11,20,18,0.75) 100%);
+  }
+  #calibrationViewport { touch-action: none; }
+  #calibrationZoomGroup { transform-origin: 0 0; will-change: transform; }
+  .zoom-btn {
+    width: 40px; height: 40px; border-radius: 9999px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(5,7,10,0.85); border: 1px solid var(--pitch-border);
+    color: var(--pitch-text, #eef3fb); backdrop-filter: blur(6px);
+  }
+  .zoom-btn:disabled { opacity: 0.35; }
+</style>
 </head>
-<body class="bg-background text-on-background font-body min-h-[100dvh] flex flex-col">
-<!-- TopAppBar -->
-<header class="w-full top-0 sticky z-50 bg-[#0e1417]">
-<div class="flex justify-between items-center px-6 py-4 w-full">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-[#96ceeb]" data-icon="speed">speed</span>
-<h1 class="text-xl font-bold text-[#96ceeb] font-['Space_Grotesk'] tracking-tight">FastBowl Lab</h1>
-</div>
-<div class="flex items-center gap-4">
-<div class="hidden md:flex gap-6 mr-6">
-<a class="text-[#96ceeb] font-['Lexend'] text-sm font-medium cursor-pointer hover:bg-[#252b2e] transition-colors px-3 py-1 rounded-xl" href="dashboard.html">Dashboard</a>
-<span class="text-[#abd600] font-['Lexend'] text-sm font-medium cursor-pointer bg-[#006a3d]/20 px-3 py-1 rounded-xl">Sessions</span>
-<span class="text-[#96ceeb] font-['Lexend'] text-sm font-medium cursor-pointer hover:bg-[#252b2e] transition-colors px-3 py-1 rounded-xl">Settings</span>
-</div>
-<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/20">
-<img alt="Profile" data-alt="close-up profile avatar of a professional cricket coach wearing a dark athletic cap and performance gear" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOiape0ozgc0Ud9eUw316R7FTXFKEDithB-EneIq6cS2KhJ5fVNsy1JRSpB22TkGer6E98pFzDY3Tko73n7j3kauMrRPom6tPHLT4QUlh9ZnFop_iu_28E_dMcwKA4YMMeyKlDJ1VtJl8dr0r9OeuqiTz8lYpP3qXA8vRWo71BSU6wGerwVa_rhs75bp1oVFDJQusRxvJhFcQhTz-_GmKdAFdCroYWGH0TLzuvYwUCT2fC8EYLfYugI2tHCRedJaRwYngMnXOI4C_p"/>
-</div>
-</div>
-</div>
+<body class="bg-background text-ink font-body min-h-[100dvh] flex flex-col">
+
+<header class="pitchiq-header flex justify-between items-center px-6 py-4">
+  <a href="dashboard.html" class="flex items-center gap-3">
+    <svg class="pitchiq-logo-mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="13" fill="currentColor" opacity="0.15"/>
+      <circle cx="16" cy="16" r="13" stroke="currentColor" stroke-width="2"/>
+      <path d="M8 9c3 3 3 17 0 20M24 9c-3 3-3 17 0 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <h1 class="text-xl font-bold text-accent-soft font-headline tracking-tight">PitchIQ</h1>
+  </a>
+  <span class="badge badge--accent">Calibration Mode</span>
 </header>
-<main class="flex-grow flex flex-col items-center justify-start pt-6 pb-24 px-4 md:px-8 relative overflow-hidden">
-<!-- Video Context Label -->
-<div class="w-full max-w-5xl flex flex-col items-center gap-2 text-center mb-6 z-20">
-<div class="bg-primary/10 backdrop-blur-md px-4 py-1.5 rounded-full border border-primary/20">
-<span class="font-label text-[10px] md:text-xs uppercase tracking-[0.2em] text-primary font-semibold">Calibration Mode</span>
-</div>
-<h2 class="font-headline text-2xl md:text-3xl font-bold tracking-tight text-on-surface">Precision Alignment</h2>
-</div>
-<!-- Main Calibration Canvas -->
-<div class="relative w-full max-w-2xl aspect-[4/5] md:aspect-video rounded-3xl overflow-hidden bg-surface-container-lowest shadow-2xl border border-outline-variant/10 group">
-<!-- Video Frame - Load actual uploaded video -->
-<img id="videoFrame" alt="Uploaded Video First Frame" class="w-full h-full object-cover" style="display: block;" />
-<!-- Calibration Overlays -->
-<div class="absolute inset-0 calibration-overlay pointer-events-none"></div>
-<!-- Scanning Grid Visual -->
-<div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: linear-gradient(#96ceeb 1px, transparent 1px), linear-gradient(90deg, #96ceeb 1px, transparent 1px); background-size: 40px 40px;"></div>
-<!-- Click-to-place Point Markers -->
-<!-- TOP MARKER - Small point indicator with drag support -->
-<div id="topMarker" class="absolute w-6 h-6 z-10" style="touch-action: none; transform: translate(-50%, -50%); pointer-events: none; cursor: grab;">
-<div class="w-6 h-6 rounded-full border-2 border-tertiary bg-tertiary/30 flex items-center justify-center shadow-lg">
-<div class="w-1.5 h-1.5 bg-tertiary rounded-full"></div>
-</div>
-<div class="absolute top-[-24px] left-1/2 -translate-x-1/2 bg-tertiary text-on-tertiary font-label text-[10px] px-2 py-0.5 rounded-full font-bold shadow-md whitespace-nowrap pointer-events-none">TOP</div>
-</div>
-<!-- BOTTOM MARKER - Small point indicator with drag support -->
-<div id="bottomMarker" class="absolute w-6 h-6 z-10" style="touch-action: none; transform: translate(-50%, -50%); pointer-events: none; cursor: grab;">
-<div class="w-6 h-6 rounded-full border-2 border-secondary bg-secondary/30 flex items-center justify-center shadow-lg">
-<div class="w-1.5 h-1.5 bg-secondary rounded-full"></div>
-</div>
-<div class="absolute top-[-24px] left-1/2 -translate-x-1/2 bg-secondary text-on-secondary font-label text-[10px] px-2 py-0.5 rounded-full font-bold shadow-md whitespace-nowrap pointer-events-none">BOTTOM</div>
-</div>
 
-<!-- Clickable overlay for point placement -->
-<div id="calibrationCanvas" class="absolute inset-0 cursor-crosshair" data-point="none"></div>
-<!-- Detection Reticle / Guidelines -->
-<div class="absolute inset-0 border-[24px] border-surface/30 pointer-events-none"></div>
-<!-- Desktop Sidebar Info -->
-<!-- <div class="absolute left-6 top-1/2 -translate-y-1/2 w-72 bg-surface-container-high/60 backdrop-blur-xl rounded-2xl p-6 border border-outline-variant/20 hidden lg:block">
-<!-- <div class="flex items-center gap-3 mb-4">
-<div class="w-8 h-8 rounded-lg bg-secondary/20 flex items-center justify-center">
-<span class="material-symbols-outlined text-secondary text-sm" data-icon="check_circle" data-weight="fill">check_circle</span>
-</div>
-<!-- <span class="font-label text-xs font-semibold text-on-surface uppercase tracking-wider">AI Detection Active</span>
-</div>
-<p class="font-body text-sm text-on-surface-variant leading-relaxed">
-                    Stumps detected. You can refine the markers manually or skip to proceed. Our neural model has identified the key tracking points.
-                </p>
-<div class="mt-6 space-y-3">
-<div class="flex justify-between items-center text-xs font-label">
-<span class="text-on-surface-variant">Confidence Score</span>
-<span class="text-tertiary">98.4%</span>
-</div> -->
-<!-- <div class="w-full bg-surface-container-low h-1.5 rounded-full overflow-hidden">
-<div class="bg-tertiary h-full rounded-full" style="width: 98%;"></div>
-</div> -->
-</div> 
-</div>
-</div>
-<!-- Instruction Text - Improved Mobile Hierarchy -->
-<div class="mt-8 px-6 text-center max-w-md">
-<div class="flex items-center justify-center gap-2 mb-2 text-secondary">
-<span class="material-symbols-outlined text-lg" data-icon="lightbulb">lightbulb</span>
-<span class="font-label text-xs font-bold uppercase tracking-wider">Pro Tip</span>
-</div>
-<p class="font-body text-base text-on-surface leading-snug font-medium" id="calibrationInstruction">
-            Click on the video to mark the <strong>TOP</strong> of the stump.
-        </p>
-<p class="mt-2 font-body text-sm text-on-surface-variant opacity-80">
-            Be as precise as possible for accurate measurement.
-        </p>
-</div>
-<!-- Floating Controls Overlay - Mobile Optimized -->
-<div class="fixed bottom-24 left-0 right-0 px-6 z-40 flex flex-col gap-3 max-w-xl mx-auto w-full md:relative md:bottom-auto md:mt-10 md:flex-row md:justify-center md:gap-4">
-<div class="flex gap-3 w-full md:w-auto">
-<button id="undoBtn" onclick="undoPoint()" class="h-16 md:h-auto bg-surface-container-highest/90 backdrop-blur-md text-on-surface font-label text-sm font-semibold px-6 py-4 rounded-2xl border border-outline-variant/50 hover:bg-surface-bright transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex-1 md:flex-none" title="Undo last point">
-<span class="material-symbols-outlined text-lg">undo</span>
-                        Undo
-                    </button>
-<button id="redoBtn" onclick="redoPoint()" class="h-16 md:h-auto bg-surface-container-highest/90 backdrop-blur-md text-on-surface font-label text-sm font-semibold px-6 py-4 rounded-2xl border border-outline-variant/50 hover:bg-surface-bright transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex-1 md:flex-none" title="Redo undone point">
-<span class="material-symbols-outlined text-lg">redo</span>
-                        Redo
-                    </button>
-</div>
-<button id="confirmBtn" onclick="submitCalibration()" class="w-full md:w-auto h-16 md:h-auto bg-tertiary text-on-tertiary font-label text-base font-bold px-10 py-4 rounded-2xl shadow-[0_8px_24px_rgba(171,214,0,0.3)] hover:brightness-110 transition-all active:scale-[0.98] flex items-center justify-center gap-3">
-<span class="material-symbols-outlined text-2xl" data-icon="play_arrow" data-weight="fill">play_arrow</span>
-                    Confirm &amp; Continue
-                </button>
-</div>
+<main class="flex-grow flex flex-col items-center justify-start pt-6 pb-32 px-4 relative">
+  <div class="w-full max-w-2xl text-center mb-5">
+    <h2 class="font-headline text-2xl md:text-3xl font-bold tracking-tight text-ink">Mark the Stump</h2>
+  </div>
+
+  <!-- Calibration Viewport -->
+  <div id="calibrationViewport" class="relative w-full max-w-2xl aspect-[4/5] md:aspect-video rounded-3xl overflow-hidden bg-black border border-border shadow-2xl">
+    <div id="calibrationZoomGroup" class="absolute inset-0">
+      <img id="videoFrame" alt="Uploaded video first frame" class="w-full h-full object-cover" style="display: block;"/>
+      <div class="absolute inset-0 calibration-overlay pointer-events-none"></div>
+
+      <!-- TOP MARKER -->
+      <div id="topMarker" class="absolute w-6 h-6 z-10" style="touch-action: none; transform: translate(-50%, -50%); pointer-events: none; cursor: grab;">
+        <div class="w-6 h-6 rounded-full border-2 border-accent bg-accent/30 flex items-center justify-center shadow-lg">
+          <div class="w-1.5 h-1.5 bg-accent rounded-full"></div>
+        </div>
+        <div class="absolute top-[-24px] left-1/2 -translate-x-1/2 bg-accent text-on-accent font-label text-[10px] px-2 py-0.5 rounded-full font-bold shadow-md whitespace-nowrap pointer-events-none">TOP</div>
+      </div>
+      <!-- BOTTOM MARKER -->
+      <div id="bottomMarker" class="absolute w-6 h-6 z-10" style="touch-action: none; transform: translate(-50%, -50%); pointer-events: none; cursor: grab;">
+        <div class="w-6 h-6 rounded-full border-2 border-blue bg-blue/30 flex items-center justify-center shadow-lg">
+          <div class="w-1.5 h-1.5 bg-blue rounded-full"></div>
+        </div>
+        <div class="absolute top-[-24px] left-1/2 -translate-x-1/2 bg-blue text-on-accent font-label text-[10px] px-2 py-0.5 rounded-full font-bold shadow-md whitespace-nowrap pointer-events-none">BOTTOM</div>
+      </div>
+
+      <!-- Clickable overlay for point placement / pan -->
+      <div id="calibrationCanvas" class="absolute inset-0 cursor-crosshair" data-point="none"></div>
+    </div>
+
+    <!-- Zoom controls (viewport-space, not affected by zoom transform) -->
+    <div class="absolute bottom-4 right-4 z-20 flex flex-col items-center gap-2">
+      <span id="zoomLevelLabel" class="font-label text-[10px] font-bold text-ink bg-surface-high/90 border border-border rounded-full px-2 py-0.5">100%</span>
+      <button id="zoomInBtn" class="zoom-btn" title="Zoom in"><span class="material-symbols-outlined text-lg">zoom_in</span></button>
+      <button id="zoomOutBtn" class="zoom-btn" title="Zoom out" disabled><span class="material-symbols-outlined text-lg">zoom_out</span></button>
+      <button id="zoomResetBtn" class="zoom-btn" title="Reset zoom"><span class="material-symbols-outlined text-lg">restart_alt</span></button>
+    </div>
+  </div>
+
+  <!-- Instruction Text -->
+  <div class="mt-6 px-6 text-center max-w-md">
+    <p class="font-body text-base text-ink leading-snug font-medium" id="calibrationInstruction">
+      Click on the video to mark the <strong>TOP</strong> of the stump.
+    </p>
+  </div>
+
+  <!-- Controls -->
+  <div class="fixed bottom-20 left-0 right-0 px-6 z-40 flex flex-col gap-3 max-w-xl mx-auto w-full md:relative md:bottom-auto md:mt-8 md:flex-row md:justify-center md:gap-4">
+    <div class="flex gap-3 w-full md:w-auto">
+      <button id="undoBtn" onclick="undoPoint()" class="btn-secondary h-14 md:h-auto text-sm px-6 py-4 flex items-center justify-center gap-2 flex-1 md:flex-none" title="Undo last point">
+        <span class="material-symbols-outlined text-lg">undo</span> Undo
+      </button>
+      <button id="redoBtn" onclick="redoPoint()" class="btn-secondary h-14 md:h-auto text-sm px-6 py-4 flex items-center justify-center gap-2 flex-1 md:flex-none" title="Redo undone point">
+        <span class="material-symbols-outlined text-lg">redo</span> Redo
+      </button>
+    </div>
+    <button id="confirmBtn" onclick="submitCalibration()" class="btn-primary w-full md:w-auto h-14 md:h-auto text-base px-10 py-4 flex items-center justify-center gap-3">
+      <span class="material-symbols-outlined text-2xl" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+      Confirm &amp; Continue
+    </button>
+  </div>
 </main>
-<!-- BottomNavBar (Mobile only) -->
-<nav class="md:hidden fixed bottom-0 w-full z-50 bg-[#0e1417]/95 backdrop-blur-2xl border-t border-outline-variant/10 flex justify-around items-center px-4 pt-3 pb-safe">
-<a class="flex flex-col items-center justify-center text-[#96ceeb]/60 py-1" href="dashboard.html">
-<span class="material-symbols-outlined text-[26px]" data-icon="dashboard">dashboard</span>
-<span class="font-['Lexend'] text-[10px] font-medium mt-1">Dashboard</span>
-</a>
-<a class="flex flex-col items-center justify-center text-[#abd600] bg-[#006a3d]/20 rounded-2xl px-4 py-1.5" href="#">
-<span class="material-symbols-outlined text-[26px]" data-icon="history">history</span>
-<span class="font-['Lexend'] text-[10px] font-bold mt-0.5">Sessions</span>
-</a>
-<a class="flex flex-col items-center justify-center text-[#96ceeb]/60 py-1" href="#">
-<span class="material-symbols-outlined text-[26px]" data-icon="add_circle">add_circle</span>
-<span class="font-['Lexend'] text-[10px] font-medium mt-1">Upload</span>
-</a>
-<a class="flex flex-col items-center justify-center text-[#96ceeb]/60 py-1" href="#">
-<span class="material-symbols-outlined text-[26px]" data-icon="settings">settings</span>
-<span class="font-['Lexend'] text-[10px] font-medium mt-1">Settings</span>
-</a>
-</nav>
-<!-- Visual Embellishment: Background Pulse Gradient -->
-<div class="fixed top-[-10%] right-[-10%] w-[50%] h-[50%] bg-primary/10 rounded-full blur-[120px] pointer-events-none -z-10"></div>
-<div class="fixed bottom-[-5%] left-[-5%] w-[40%] h-[40%] bg-tertiary/10 rounded-full blur-[100px] pointer-events-none -z-10"></div>
 
+<nav class="md:hidden pitchiq-bottom-nav safe-pb flex justify-around items-center px-4 py-3">
+  <a class="flex flex-col items-center justify-center text-muted py-1" href="dashboard.html">
+    <span class="material-symbols-outlined text-[24px]">space_dashboard</span>
+    <span class="font-label text-[10px] font-medium mt-1">Overview</span>
+  </a>
+  <a class="flex flex-col items-center justify-center text-accent-soft py-1" href="upload.html">
+    <span class="material-symbols-outlined text-[24px]">add_circle</span>
+    <span class="font-label text-[10px] font-medium mt-1">Upload</span>
+  </a>
+</nav>
+
+<script src="assets/js/shared.js"></script>
 <script>
 // Global state
 let sessionId = null;
@@ -245,7 +141,7 @@ let markers = {
     top: { x: 0.5, y: 0.35 },
     bottom: { x: 0.5, y: 0.68 }
 };
-let nextPointToPlace = 'top'; // Track which point user should place next
+let nextPointToPlace = 'top';
 let isCurrentlyDragging = false;
 let draggedMarkerName = null;
 
@@ -253,10 +149,9 @@ let draggedMarkerName = null;
 let history = [];
 let historyIndex = -1;
 
-// Save state to history
 function saveState() {
     historyIndex += 1;
-    history = history.slice(0, historyIndex); // Remove any redo items
+    history = history.slice(0, historyIndex);
     history.push({
         markers: JSON.parse(JSON.stringify(markers)),
         nextPointToPlace: nextPointToPlace
@@ -264,7 +159,6 @@ function saveState() {
     updateHistoryButtons();
 }
 
-// Undo to previous state
 function undoPoint() {
     if (historyIndex > 0) {
         historyIndex -= 1;
@@ -278,7 +172,6 @@ function undoPoint() {
     }
 }
 
-// Redo to next state
 function redoPoint() {
     if (historyIndex < history.length - 1) {
         historyIndex += 1;
@@ -292,28 +185,110 @@ function redoPoint() {
     }
 }
 
-// Update undo/redo button states
 function updateHistoryButtons() {
     document.getElementById('undoBtn').disabled = historyIndex <= 0;
     document.getElementById('redoBtn').disabled = historyIndex >= history.length - 1;
 }
 
+// ── Zoom / pan state ─────────────────────────────────────────────────────
+let zoomScale = 1;
+let panX = 0, panY = 0;
+const ZOOM_MIN = 1, ZOOM_MAX = 4, ZOOM_STEP = 0.5;
+let isPanning = false, panStart = null, panMoved = false, panJustHappened = false;
+
+function applyZoomTransform() {
+    const group = document.getElementById('calibrationZoomGroup');
+    group.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+    document.getElementById('zoomLevelLabel').textContent = Math.round(zoomScale * 100) + '%';
+    document.getElementById('zoomOutBtn').disabled = zoomScale <= ZOOM_MIN;
+    document.getElementById('zoomInBtn').disabled = zoomScale >= ZOOM_MAX;
+}
+
+function clampPan() {
+    const viewport = document.getElementById('calibrationViewport');
+    const w = viewport.clientWidth, h = viewport.clientHeight;
+    const minX = w - w * zoomScale, maxX = 0;
+    const minY = h - h * zoomScale, maxY = 0;
+    panX = Math.min(maxX, Math.max(minX, panX));
+    panY = Math.min(maxY, Math.max(minY, panY));
+}
+
+function zoomBy(deltaScale, anchorClientX, anchorClientY) {
+    const viewport = document.getElementById('calibrationViewport');
+    const rect = viewport.getBoundingClientRect();
+    const px = (anchorClientX !== undefined ? anchorClientX - rect.left : rect.width / 2);
+    const py = (anchorClientY !== undefined ? anchorClientY - rect.top : rect.height / 2);
+
+    const newScale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, +(zoomScale + deltaScale).toFixed(2)));
+    if (newScale === zoomScale) return;
+
+    // Keep the point under the anchor visually fixed while zooming
+    const contentX = (px - panX) / zoomScale;
+    const contentY = (py - panY) / zoomScale;
+    panX = px - newScale * contentX;
+    panY = py - newScale * contentY;
+    zoomScale = newScale;
+    clampPan();
+    applyZoomTransform();
+}
+
+function resetZoom() {
+    zoomScale = 1; panX = 0; panY = 0;
+    applyZoomTransform();
+}
+
+document.getElementById('zoomInBtn').addEventListener('click', () => zoomBy(ZOOM_STEP));
+document.getElementById('zoomOutBtn').addEventListener('click', () => zoomBy(-ZOOM_STEP));
+document.getElementById('zoomResetBtn').addEventListener('click', resetZoom);
+
+const viewportEl = document.getElementById('calibrationViewport');
+viewportEl.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? ZOOM_STEP / 2 : -ZOOM_STEP / 2;
+    zoomBy(delta, e.clientX, e.clientY);
+}, { passive: false });
+
+function panPointerDown(e) {
+    if (zoomScale <= 1) return;
+    if (e.target.closest('#topMarker') || e.target.closest('#bottomMarker')) return;
+    const point = e.touches ? e.touches[0] : e;
+    isPanning = true;
+    panMoved = false;
+    panStart = { x: point.clientX, y: point.clientY, panX, panY };
+}
+function panPointerMove(e) {
+    if (!isPanning || !panStart) return;
+    const point = e.touches ? e.touches[0] : e;
+    const dx = point.clientX - panStart.x;
+    const dy = point.clientY - panStart.y;
+    if (!panMoved && Math.hypot(dx, dy) > 4) panMoved = true;
+    if (panMoved) {
+        panX = panStart.panX + dx;
+        panY = panStart.panY + dy;
+        clampPan();
+        applyZoomTransform();
+        e.preventDefault();
+    }
+}
+function panPointerUp() {
+    if (isPanning && panMoved) panJustHappened = true;
+    isPanning = false;
+    panStart = null;
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
-    // Get session ID from URL
     const params = new URLSearchParams(window.location.search);
     sessionId = params.get('session');
-    
+
     if (!sessionId) {
         alert('No session ID provided');
         window.location.href = 'dashboard.html';
         return;
     }
-    
-    // Load video preview and get dimensions
+
     await loadVideoPreview();
-    
-    // Get video dimensions for coordinate conversion
+
     try {
         const img = document.getElementById('videoFrame');
         const onload = new Promise((resolve) => {
@@ -327,33 +302,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         console.error('Error getting video dimensions:', error);
     }
-    
-    // Enable click-to-place functionality
+
     enableClickToPlace();
-    
-    // Initialize marker positions on screen
     updateMarkerPositions();
-    
-    // Save initial state for undo/redo
+
+    const canvasEl = document.getElementById('calibrationCanvas');
+    canvasEl.addEventListener('mousedown', panPointerDown);
+    canvasEl.addEventListener('touchstart', panPointerDown, { passive: true });
+    document.addEventListener('mousemove', panPointerMove);
+    document.addEventListener('touchmove', panPointerMove, { passive: false });
+    document.addEventListener('mouseup', panPointerUp);
+    document.addEventListener('touchend', panPointerUp);
+
     saveState();
     updateHistoryButtons();
     updateInstructions();
 });
 
-// Load video frame from API
 async function loadVideoPreview() {
     try {
         const response = await fetch(`/api/calibration/preview/${sessionId}`);
         if (!response.ok) throw new Error(`Failed to load video preview: ${response.statusText}`);
-        
+
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
-        
-        // Set image source
+
         const img = document.getElementById('videoFrame');
         img.src = url;
         img.style.display = 'block';
-        
+
         console.log('Video preview loaded successfully');
     } catch (error) {
         console.error('Error loading video preview:', error);
@@ -361,43 +338,38 @@ async function loadVideoPreview() {
     }
 }
 
-// Update marker visual positions
 function updateMarkerPositions() {
     const topMarker = document.getElementById('topMarker');
     const bottomMarker = document.getElementById('bottomMarker');
-    
+
     if (canvasDims.width === 0) return;
-    
-    // Calculate as percentages for accurate positioning
+
     const topX = markers.top.x * 100;
     const topY = markers.top.y * 100;
     const botX = markers.bottom.x * 100;
     const botY = markers.bottom.y * 100;
-    
+
     topMarker.style.left = topX + '%';
     topMarker.style.top = topY + '%';
-    
+
     bottomMarker.style.left = botX + '%';
     bottomMarker.style.top = botY + '%';
 }
 
-// Enable click-to-place functionality
 function enableClickToPlace() {
     const canvas = document.getElementById('calibrationCanvas');
-    
+
     canvas.addEventListener('click', (e) => {
-        // Don't place a new point while dragging
+        if (panJustHappened) { panJustHappened = false; return; }
         if (isCurrentlyDragging) return;
-        
+
         const rect = canvas.parentElement.getBoundingClientRect();
         const x = (e.clientX - rect.left) / rect.width;
         const y = (e.clientY - rect.top) / rect.height;
-        
-        // Clamp to bounds
+
         const clampedX = Math.max(0, Math.min(1, x));
         const clampedY = Math.max(0, Math.min(1, y));
-        
-        // Place the next point
+
         if (nextPointToPlace === 'top') {
             markers.top.x = clampedX;
             markers.top.y = clampedY;
@@ -411,38 +383,34 @@ function enableClickToPlace() {
             showNotification('✓ Bottom point set. Drag to fine-tune or click Confirm.');
             saveState();
         }
-        
+
         updateMarkerPositions();
         updateInstructions();
         enableMarkerDragging();
     });
-    
+
     enableMarkerDragging();
 }
 
-// Enable dragging on placed markers for fine-tuning
 function enableMarkerDragging() {
     const topMarker = document.getElementById('topMarker');
     const bottomMarker = document.getElementById('bottomMarker');
-    
-    // Enable pointer events and drag on both markers
+
     topMarker.style.pointerEvents = 'auto';
     bottomMarker.style.pointerEvents = 'auto';
-    
-    // Add drag listeners to markers (only add once per marker)
+
     if (!topMarker.dataset.dragAdded) {
         topMarker.addEventListener('mousedown', startDrag, false);
         topMarker.addEventListener('touchstart', startDrag, false);
         topMarker.dataset.dragAdded = 'true';
     }
-    
+
     if (!bottomMarker.dataset.dragAdded) {
         bottomMarker.addEventListener('mousedown', startDrag, false);
         bottomMarker.addEventListener('touchstart', startDrag, false);
         bottomMarker.dataset.dragAdded = 'true';
     }
-    
-    // Add global move/drop listeners only once
+
     if (!window.dragListenersAdded) {
         document.addEventListener('mousemove', dragging, false);
         document.addEventListener('touchmove', dragging, false);
@@ -452,39 +420,35 @@ function enableMarkerDragging() {
     }
 }
 
-// Start dragging a marker
 function startDrag(e) {
-    if (nextPointToPlace === 'top') return; // Can't drag if we haven't placed top yet
-    
+    if (nextPointToPlace === 'top') return;
+
     isCurrentlyDragging = true;
     draggedMarkerName = e.currentTarget.id === 'topMarker' ? 'top' : 'bottom';
     e.currentTarget.style.cursor = 'grabbing';
     e.preventDefault();
+    e.stopPropagation();
 }
 
-// While dragging
 function dragging(e) {
     if (!isCurrentlyDragging || !draggedMarkerName) return;
-    
+
     const canvas = document.getElementById('calibrationCanvas');
     const rect = canvas.parentElement.getBoundingClientRect();
-    
+
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    
-    // Calculate normalized position (0-1)
+
     const x = (clientX - rect.left) / rect.width;
     const y = (clientY - rect.top) / rect.height;
-    
-    // Clamp to bounds
+
     markers[draggedMarkerName].x = Math.max(0, Math.min(1, x));
     markers[draggedMarkerName].y = Math.max(0, Math.min(1, y));
-    
+
     updateMarkerPositions();
     e.preventDefault();
 }
 
-// Stop dragging
 function stopDrag(e) {
     if (isCurrentlyDragging && draggedMarkerName) {
         const marker = document.getElementById(draggedMarkerName === 'top' ? 'topMarker' : 'bottomMarker');
@@ -496,24 +460,22 @@ function stopDrag(e) {
     draggedMarkerName = null;
 }
 
-// Show temporary notification to user
 function showNotification(message) {
     const notification = document.createElement('div');
-    notification.className = 'fixed top-20 left-1/2 -translate-x-1/2 bg-tertiary text-on-tertiary px-6 py-3 rounded-full font-label text-sm font-semibold shadow-lg z-50 animate-in fade-in slide-in-from-top';
+    notification.className = 'toast animate-in';
     notification.textContent = message;
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         notification.classList.add('animate-out');
         setTimeout(() => notification.remove(), 300);
     }, 2000);
 }
 
-// Update instruction text based on calibration state
 function updateInstructions() {
     const instruction = document.getElementById('calibrationInstruction');
     const confirmBtn = document.getElementById('confirmBtn');
-    
+
     if (nextPointToPlace === 'top') {
         instruction.innerHTML = 'Click on the video to mark the <strong>TOP</strong> of the stump.';
         confirmBtn.disabled = true;
@@ -521,26 +483,21 @@ function updateInstructions() {
         instruction.innerHTML = 'Now click on the video to mark the <strong>BOTTOM</strong> of the stump. You can drag the TOP point to fine-tune.';
         confirmBtn.disabled = true;
     } else if (nextPointToPlace === 'complete') {
-        instruction.innerHTML = '✓ Points set! Drag either point to fine-tune, then click <strong>Confirm & Continue</strong>.';
+        instruction.innerHTML = '✓ Points set! Drag either point to fine-tune, then click <strong>Confirm &amp; Continue</strong>.';
         confirmBtn.disabled = false;
     }
 }
 
-// Submit calibration points
 async function submitCalibration() {
     try {
-        // Use actual video dimensions if available, otherwise estimate
         const videoWidth = canvasDims.width || 1920;
         const videoHeight = canvasDims.height || 1080;
-        
-        // Convert NORMALIZED coordinates (0-1) to PIXEL coordinates
-        // These represent the CENTER of the marked points
+
         const topPixelX = Math.round(markers.top.x * videoWidth);
         const topPixelY = Math.round(markers.top.y * videoHeight);
         const botPixelX = Math.round(markers.bottom.x * videoWidth);
         const botPixelY = Math.round(markers.bottom.y * videoHeight);
-        
-        // Log detailed information for verification
+
         console.log('=== CALIBRATION SUBMISSION ===');
         console.log('Video dimensions:', { width: videoWidth, height: videoHeight });
         console.log('Normalized coordinates (0-1):');
@@ -551,29 +508,26 @@ async function submitCalibration() {
         console.log('  BOTTOM:', { x: botPixelX, y: botPixelY });
         console.log('Stump distance in pixels:', Math.abs(botPixelY - topPixelY));
         console.log('==============================');
-        
-        // API expects pixel coordinates
+
         const calibrationData = {
             top: { x: topPixelX, y: topPixelY },
             bottom: { x: botPixelX, y: botPixelY }
         };
-        
-        // Submit to API
+
         const response = await fetch(`/api/calibration/${sessionId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(calibrationData)
         });
-        
+
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.error || 'Failed to submit calibration');
         }
-        
+
         const result = await response.json();
         console.log('Calibration submitted:', result);
-        
-        // Start processing
+
         await startProcessing();
     } catch (error) {
         console.error('Calibration error:', error);
@@ -581,25 +535,21 @@ async function submitCalibration() {
     }
 }
 
-// Start video processing
 async function startProcessing() {
     try {
         const response = await fetch(`/api/process/${sessionId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
-        
+
         if (!response.ok) throw new Error('Failed to start processing');
-        
-        // Navigate to processing page
+
         window.location.href = `processing.html?session=${sessionId}`;
     } catch (error) {
         console.error('Processing error:', error);
         alert('Failed to start processing. Please try again.');
     }
 }
-
-// Initialize marker dragging on load
-// Initialization complete - ready for user clicks
 </script>
-</body></html>
+</body>
+</html>
