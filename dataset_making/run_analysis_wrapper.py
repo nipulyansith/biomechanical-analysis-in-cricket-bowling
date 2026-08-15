@@ -91,6 +91,7 @@ def main():
         # Load model
         print(f"\n📦 Loading YOLO model: {MODEL_PATH}")
         model = YOLO(MODEL_PATH)
+        model.to(all_module.DEVICE)
         
         # Step 1: Extract keypoints
         print(f"\n🔍 Extracting keypoints from video...")

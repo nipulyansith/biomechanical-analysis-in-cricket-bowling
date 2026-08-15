@@ -18,6 +18,7 @@ import cv2
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import torch
 from ultralytics import YOLO
 from scipy.signal import savgol_filter, find_peaks
 from pathlib import Path
@@ -30,6 +31,10 @@ import openpyxl
 VIDEO_PATH   = r"C:\Users\nipul\OneDrive\Desktop\tm\videos\B-05_T-01.MOV"
 MODEL_PATH   = "yolov8l-pose.pt"
 BASE_OUT_DIR = "output"
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Using device: {DEVICE}"
+      + (f" ({torch.cuda.get_device_name(0)})" if DEVICE == "cuda" else ""))
 
 FRAMES_DATASET_PATH = "frames.xlsx"
 MASTER_DATASET_PATH = "master.xlsx"
@@ -489,7 +494,7 @@ def extract_keypoints(video_path, model):
             xy_row[f"{name}_x"]      = np.nan
             xy_row[f"{name}_y"]      = np.nan
             conf_row[f"{name}_conf"] = np.nan
-        results = model.predict(frame, verbose=False)
+        results = model.predict(frame, verbose=False, device=DEVICE)
         if (results and results[0].keypoints is not None
                 and len(results[0].keypoints.xy) > 0
                 and results[0].keypoints.conf is not None):
@@ -1209,6 +1214,7 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
     vw, ow, oh = sized_writer(out_vid, fps, width, height)
     step_foot_map = {last5_frames[i]: foot_labels[i] for i in range(5)}
     model_local   = YOLO(MODEL_PATH)
+    model_local.to(DEVICE)
     cap       = cv2.VideoCapture(video_path)
     cap.set(cv2.CAP_PROP_POS_FRAMES, last5_frames[0] - 1)
     frame_idx = last5_frames[0]
@@ -1218,7 +1224,7 @@ def run_step_cadence(df_xy, fps, events, video_path, width, height):
         ret, frame = cap.read()
         if not ret:
             break
-        results   = model_local.predict(frame, verbose=False)
+        results   = model_local.predict(frame, verbose=False, device=DEVICE)
         annotated = cv2.resize(frame, (ow, oh))
         if (results and results[0].keypoints is not None
                 and len(results[0].keypoints.xy) > 0):
@@ -1364,15 +1370,16 @@ def run_delivery_stride(df_xy, fps, events, meters_per_pixel, video_path, width,
             mid_x = int((bx+fx)/2*s); mid_y = int((by+fy)/2*s) - int(20*s)
             cv2.putText(ann, f"STRIDE: {stride_m:.2f} m", (mid_x-int(60*s), mid_y),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7*s/0.5, (255, 255, 0), 2, cv2.LINE_AA)
-        event = ("BFC — Back Foot Contact"  if frame_no == bfc_frame else
-                 "FFC — Front Foot Contact" if frame_no == ffc_frame else
-                 "RELEASE"                  if frame_no == release_frame else "")
         info = ["MODULE: DELIVERY STRIDE",
                 f"Frame: {frame_no}   Time: {frame_no/fps:.2f}s",
                 f"BFC frame: {bfc_frame}  FFC frame: {ffc_frame}",
                 f"Stride length: {stride_m:.2f} m",
                 f"Stride duration: {duration_s:.3f} s"]
-        if event: info.insert(1, f">>> {event} <<<")
+        # Independent checks (not elif) so events that land on the same frame
+        # (e.g. FFC and RELEASE) are both shown instead of one hiding the other.
+        if frame_no == bfc_frame:     info.insert(1, ">>> BFC — Back Foot Contact <<<")
+        if frame_no == ffc_frame:     info.insert(1, ">>> FFC — Front Foot Contact <<<")
+        if frame_no == release_frame: info.insert(1, ">>> RELEASE <<<")
         draw_info_box(ann, info, x=10, y=10,
                       font_scale=0.55 * OUTPUT_SCALE / 0.5)
         
@@ -1546,15 +1553,15 @@ def run_elbow_flexion(df_xy, fps, events, bowling_wrist, video_path, width, heig
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45*s/0.5, (200,200,200), 1)
             cv2.putText(ann, "0", (gauge_x-int(18*s),gauge_y1),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45*s/0.5, (200,200,200), 1)
-        event = (">>> ARM-BACK <<<" if frame_no == arm_back_frame else
-                 ">>> BALL RELEASE <<<" if frame_no == release_frame else "")
         info  = [f"MODULE: {arm_label} ARM ELBOW FLEXION",
                  f"Frame: {frame_no}   Time: {frame_no/fps:.2f}s",
                  f"Elbow angle: {ang:.1f} deg" if np.isfinite(ang) else "Elbow angle: --",
                  "(180=straight  <180=flexed)"]
         if np.isfinite(elbow_extension):
             info.append(f"Extension: {elbow_extension:.1f} deg")
-        if event: info.insert(1, event)
+        # Independent checks (not elif) so events on the same frame all show.
+        if frame_no == arm_back_frame: info.insert(1, ">>> ARM-BACK <<<")
+        if frame_no == release_frame:  info.insert(1, ">>> BALL RELEASE <<<")
         draw_info_box(ann, info, x=10, y=10, font_scale=0.55 * OUTPUT_SCALE / 0.5)
         
         # Draw release point marker on release frame
@@ -1883,14 +1890,15 @@ def run_head_position(df_xy, fps, events, bowling_wrist,
             cv2.arrowedLine(ann,F_d,(H_d[0],F_d[1]),(255,255,0),max(2,int(3*s)),cv2.LINE_AA,tipLength=0.05)
             mid_dx=((F_d[0]+H_d[0])//2,F_d[1]-int(15*s))
             cv2.putText(ann,f"Dx={dx_cm2:.1f}cm",mid_dx,cv2.FONT_HERSHEY_SIMPLEX,0.55*s/0.5,(255,255,0),2,cv2.LINE_AA)
-        event_label=("BFC" if frame_no==bfc_frame else "FFC" if frame_no==ffc_frame else
-                     "RELEASE" if frame_no==release_frame else "")
         info=["MODULE: HEAD / COM POSITION",
               f"Frame: {frame_no}   Time: {frame_no/fps:.2f}s",
               f"Head Dx: {dx_cm2:.1f} cm" if np.isfinite(dx_cm2) else "Head Dx: --",
               f"Head Dy: {dy_cm2:.1f} cm" if np.isfinite(dy_cm2) else "Head Dy: --",
               "Green=Head  Red=Front foot"]
-        if event_label: info.insert(1, f">>> {event_label} <<<")
+        # Independent checks (not elif) so events on the same frame all show.
+        if frame_no==bfc_frame:     info.insert(1, ">>> BFC <<<")
+        if frame_no==ffc_frame:     info.insert(1, ">>> FFC <<<")
+        if frame_no==release_frame: info.insert(1, ">>> RELEASE <<<")
         draw_info_box(ann,info,x=10,y=10,font_scale=0.55*OUTPUT_SCALE/0.5)
         repeats=6
         if frame_no in [bfc_frame, ffc_frame, release_frame]:
@@ -2028,13 +2036,14 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
     ball_mode_b = None
     if BALL_MODEL_PATH is not None:
         ball_model_b = YOLO(BALL_MODEL_PATH)
+        ball_model_b.to(DEVICE)
         cap_b = cv2.VideoCapture(video_path)
         cap_b.set(cv2.CAP_PROP_POS_FRAMES, max(0, rel_frame2-1))
         pts_b = []
         for _ in range(BALL_TRACK_FRAMES):
             ok_b, frm_b = cap_b.read()
             if not ok_b: break
-            res_b = ball_model_b.predict(frm_b, verbose=False)
+            res_b = ball_model_b.predict(frm_b, verbose=False, device=DEVICE)
             if res_b and res_b[0].boxes is not None and len(res_b[0].boxes)>0:
                 confs_b = res_b[0].boxes.conf.cpu().numpy()
                 xyxy_b  = res_b[0].boxes.xyxy.cpu().numpy()
@@ -2129,14 +2138,14 @@ def run_wrist_velocity(df_xy, fps, events, bowling_wrist,
         cv2.putText(ann,f"{max_speed_kmh:.0f}",(gauge_x-int(35*s),gauge_y0+int(8*s)),cv2.FONT_HERSHEY_SIMPLEX,0.4*s/0.5,(200,200,200),1)
         cv2.putText(ann,"0",(gauge_x-int(15*s),gauge_y1),cv2.FONT_HERSHEY_SIMPLEX,0.4*s/0.5,(200,200,200),1)
         cv2.putText(ann,"km/h",(gauge_x-int(5*s),gauge_y1+int(18*s)),cv2.FONT_HERSHEY_SIMPLEX,0.4*s/0.5,(200,200,200),1)
-        event=(">>> BALL RELEASE <<<"     if frame_no==rel_frame2 else
-               ">>> PEAK WRIST SPEED <<<" if frame_no==near_frame  else "")
         info=[f"MODULE: {arm.upper()} WRIST VELOCITY",
               f"Frame: {frame_no}   Time: {frame_no/fps:.2f}s",
               f"Wrist speed: {spd_i:.2f} m/s  ({spd_k:.1f} km/h)",
               f"Angular vel: {omega_i:.2f} rad/s",
               f"Ball proxy: {spd_at_rel_k:.1f} km/h"]
-        if event: info.insert(1, event)
+        # Independent checks (not elif) so events on the same frame all show.
+        if frame_no==near_frame:  info.insert(1, ">>> PEAK WRIST SPEED <<<")
+        if frame_no==rel_frame2:  info.insert(1, ">>> BALL RELEASE <<<")
         draw_info_box(ann,info,x=10,y=10,font_scale=0.55*OUTPUT_SCALE/0.5)
         for _ in range(slow_mo): vw.write(ann)
 
@@ -2535,6 +2544,7 @@ def main():
 
     print(f"\n⚙️  Loading model: {MODEL_PATH}")
     model = YOLO(MODEL_PATH)
+    model.to(DEVICE)
 
     df_xy, df_conf, fps, width, height, total_frames = extract_keypoints(VIDEO_PATH, model)
 
